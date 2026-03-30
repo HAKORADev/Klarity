@@ -214,6 +214,7 @@ python src/klarity.py -lite full image.jpg
 </p>
 
 > 🎮 **Demo:** 15FPS gameplay video transformed to smooth 60FPS using Clean-Frame-Gen Heavy mode
+> 
 > Note: set playback speed to 0.25 to see the difference clearly
 
 ---
