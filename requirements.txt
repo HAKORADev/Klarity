@@ -1,0 +1,6 @@
+torch
+opencv-python
+numpy
+tqdm
+requests
+PyQt5
