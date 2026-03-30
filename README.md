@@ -22,10 +22,10 @@ cd Klarity
 pip install -r requirements.txt
 
 # Launch GUI
-python src/gui.py
+python src/klarity.py
 
 # Or use CLI mode
-python src/klarity.py
+python src/klarity.py cli
 ```
 
 ### Installation Requirements
