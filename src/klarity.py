@@ -857,14 +857,19 @@ def generate_frames(frames_dir, output_dir, multi=2):
     pbar.set_postfix_str("")
     return total_output_frames
 
+class _SilentStepBar:
+    def update(self, msg):
+        pass
+
 def process_video_frames_step(frames_dir, output_dir, frames, step_name, process_func):
     os.makedirs(output_dir, exist_ok=True)
     total = len(frames)
+    silent = _SilentStepBar()
     with tqdm(total=total, desc=step_name, unit="frame",
               bar_format="{desc} | Frame {n_fmt}/{total_fmt} {bar:25} {percentage:5.1f}% | {elapsed}<{remaining}, {rate_fmt}") as pbar:
         for frame_name in frames:
             img = cv2.imread(os.path.join(frames_dir, frame_name))
-            img = process_func(img, step_bar=None)
+            img = process_func(img, step_bar=silent)
             cv2.imwrite(os.path.join(output_dir, frame_name), img)
             pbar.update(1)
 
