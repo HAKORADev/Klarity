@@ -6,6 +6,7 @@ import shutil
 import subprocess
 import time
 import json
+import threading
 from pathlib import Path
 from datetime import datetime, timedelta
 
@@ -679,14 +680,45 @@ def frames_to_video(frames_dir, output_path, fps, audio_path=None, desc="Compili
         '-c:v', 'libx264',
         '-pix_fmt', 'yuv420p',
         '-crf', '18',
+        '-progress', 'pipe:2',
         temp_video
     ]
-    process = subprocess.Popen(cmd, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
+    compiled_frames = [0]
+    process = subprocess.Popen(cmd, stderr=subprocess.PIPE, stdout=subprocess.PIPE, bufsize=1)
+
+    def _read_ffmpeg_progress(pipe):
+        for raw_line in iter(pipe.readline, b''):
+            decoded = raw_line.decode('utf-8', errors='ignore').strip()
+            if decoded.startswith('frame='):
+                try:
+                    compiled_frames[0] = int(decoded.split('=')[1].strip())
+                except (ValueError, IndexError):
+                    pass
+        pipe.close()
+
+    reader = threading.Thread(target=_read_ffmpeg_progress, args=(process.stderr,), daemon=True)
+    reader.start()
+
+    last_reported = [0]
     with tqdm(total=total_frames, desc=desc, unit="frames",
-              bar_format="{l_bar}{bar:30}{r_bar}") as pbar:
+              bar_format="{desc} | {n_fmt}/{total_fmt} frames {bar:25} {percentage:5.1f}% | {elapsed}<{remaining}, {rate_fmt}{postfix}") as pbar:
         while process.poll() is None:
-            time.sleep(0.1)
-        pbar.update(total_frames)
+            time.sleep(0.05)
+            current = compiled_frames[0]
+            if current > last_reported[0]:
+                pbar.update(current - last_reported[0])
+                last_reported[0] = current
+                remaining = total_frames - current
+                pbar.set_postfix_str(f"{remaining} remaining")
+        reader.join(timeout=2)
+        final = compiled_frames[0]
+        if final > last_reported[0]:
+            pbar.update(final - last_reported[0])
+            last_reported[0] = final
+        fill_needed = max(0, total_frames - pbar.n)
+        if fill_needed > 0:
+            pbar.update(fill_needed)
+        pbar.set_postfix_str("")
     if audio_path and os.path.exists(audio_path):
         cmd = [
             'ffmpeg', '-y',
@@ -797,9 +829,11 @@ def generate_frames(frames_dir, output_dir, multi=2):
     scale = get_rife_scale()
     output_idx = 0
     total_pairs = len(frames) - 1
-    pbar = tqdm(range(total_pairs), desc=f"Generating (x{multi})", unit="pairs",
-                bar_format="{l_bar}{bar:30}{r_bar}")
-    for i in pbar:
+    total_output_frames = len(frames) * multi - (multi - 1)
+    pbar = tqdm(total=total_output_frames, desc=f"Generating (x{multi})", unit="frame",
+              bar_format="{desc} | Frame {n_fmt}/{total_fmt} {bar:25} {percentage:5.1f}% | {elapsed}<{remaining} {postfix}")
+    for i in range(total_pairs):
+        pbar.set_postfix_str(f"| pair {i+1}/{total_pairs} [frame {i+1}\u2192{i+2}]")
         img0 = cv2.imread(os.path.join(frames_dir, frames[i]))
         img1 = cv2.imread(os.path.join(frames_dir, frames[i + 1]))
         img0, (orig_h, orig_w) = pad_for_rife(img0, scale)
@@ -808,6 +842,7 @@ def generate_frames(frames_dir, output_dir, multi=2):
         img1_tensor = img2tensor(img1)
         cv2.imwrite(os.path.join(output_dir, f'{output_idx:08d}.png'), img0[:orig_h, :orig_w])
         output_idx += 1
+        pbar.update(1)
         for j in range(multi - 1):
             timestep = (j + 1) / multi
             with torch.no_grad():
@@ -815,17 +850,23 @@ def generate_frames(frames_dir, output_dir, multi=2):
             mid_img = tensor2img(mid)
             cv2.imwrite(os.path.join(output_dir, f'{output_idx:08d}.png'), mid_img[:orig_h, :orig_w])
             output_idx += 1
+            pbar.update(1)
     last_frame = cv2.imread(os.path.join(frames_dir, frames[-1]))
     cv2.imwrite(os.path.join(output_dir, f'{output_idx:08d}.png'), last_frame)
-    return len(frames) * multi - (multi - 1)
+    pbar.update(1)
+    pbar.set_postfix_str("")
+    return total_output_frames
 
 def process_video_frames_step(frames_dir, output_dir, frames, step_name, process_func):
     os.makedirs(output_dir, exist_ok=True)
-    for frame_name in tqdm(frames, desc=step_name, unit="frames",
-                          bar_format="{l_bar}{bar:30}{r_bar}"):
-        img = cv2.imread(os.path.join(frames_dir, frame_name))
-        img = process_func(img, step_bar=None)
-        cv2.imwrite(os.path.join(output_dir, frame_name), img)
+    total = len(frames)
+    with tqdm(total=total, desc=step_name, unit="frame",
+              bar_format="{desc} | Frame {n_fmt}/{total_fmt} {bar:25} {percentage:5.1f}% | {elapsed}<{remaining}, {rate_fmt}") as pbar:
+        for frame_name in frames:
+            img = cv2.imread(os.path.join(frames_dir, frame_name))
+            img = process_func(img, step_bar=None)
+            cv2.imwrite(os.path.join(output_dir, frame_name), img)
+            pbar.update(1)
 
 def process_video_multistep(video_path, output_path, steps, audio_path):
     original_fps, frame_count, width, height = get_video_info(video_path)
