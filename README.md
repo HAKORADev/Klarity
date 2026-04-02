@@ -4,6 +4,12 @@
   <img src="logo.png" alt="Klarity Logo" width="128" height="128"/>
 </p>
 
+<p align="center">
+  <a href="https://huggingface.co/spaces/HAKORADev/Klarity">
+    <img src="https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Spaces-blue?style=for-the-badge" alt="Hugging Face Spaces"/>
+  </a>
+</p>
+
 **Klarity** is a local, free, offline AI-powered image and video restoration tool that delivers professional-grade denoising, deblurring, upscaling, and frame generation. Built for creators, editors, and anyone who needs to enhance visual content without subscription fees.
 
 🤖 **For AI agents and automated tools:** See [Bots.md](Bots.md)
@@ -239,6 +245,9 @@ Each component has its own license:
 
 ## Links
 
+- **🤗 HuggingFace Space:** https://huggingface.co/spaces/HAKORADev/Klarity
 - **Issues:** https://github.com/HAKORADev/Klarity/issues
+
+> 📝 **Note:** The HuggingFace demo uses **Lite models** and supports **image processing only**. For Heavy models and video support, use the desktop version.
 
 ---
