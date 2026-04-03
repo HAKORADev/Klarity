@@ -15,7 +15,7 @@ hiddenimports = [
 ]
 
 datas = [
-    (os.path.join(src_dir, 'logo.png'), '.'),
+    (os.path.join(SPECPATH, 'logo.png'), '.'),
     (os.path.join(SPECPATH, 'logo.ico'), '.'),
 ]
 
