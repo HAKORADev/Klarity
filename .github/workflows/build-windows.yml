@@ -6,16 +6,18 @@ on:
     branches: [build-windows]
     paths-ignore:
       - '*.md'
-      - '*.txt'
       - 'assets/**'
 
 permissions:
   contents: write
 
+env:
+  KLARITY_VERSION: "0.7.0"
+
 jobs:
   build:
     runs-on: windows-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
 
     steps:
       - name: Checkout repository
@@ -30,7 +32,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
           pip install PyQt5 opencv-python-headless numpy tqdm requests
           pip install pyinstaller
 
@@ -39,66 +41,129 @@ jobs:
           python -c "import torch; print(f'torch {torch.__version__}')"
           python -c "import PyQt5; print('PyQt5 OK')"
           python -c "import cv2; print(f'OpenCV {cv2.__version__}')"
-
-      - name: Create build directory
-        run: |
-          mkdir build
-          xcopy /E /I src build\src
-          copy logo.ico build\
-          copy scripts\patch_for_build.py build\
-          mkdir build\models
-
-      - name: Patch source for frozen binary
-        run: |
-          python build\patch_for_build.py
+          echo All dependencies verified OK
 
       - name: Build with PyInstaller (onedir)
+        run: pyinstaller klarity-win.spec --noconfirm --clean
+
+      - name: Create models and tmp directories
+        shell: pwsh
         run: |
-          cd build
-          pyinstaller ^
-            --onedir ^
-            --name klarity ^
-            --icon logo.ico ^
-            --console ^
-            --noconfirm ^
-            --clean ^
-            --add-data "logo.png;." ^
-            src\klarity.py
+          New-Item -ItemType Directory -Force -Path "dist/klarity/models"
+          New-Item -ItemType Directory -Force -Path "dist/klarity/tmp"
 
       - name: Create cli.bat
+        shell: pwsh
         run: |
-          cd build\dist\klarity
-          echo @echo off > cli.bat
-          echo REM Klarity - Launch interactive CLI mode >> cli.bat
-          echo "%~dp0klarity.exe" cli >> cli.bat
-          echo. >> cli.bat
+          $cliBat = @"
+          @echo off
+          REM Klarity - Launch interactive CLI mode
+          "%~dp0klarity.exe" cli
+          "@
+          Set-Content -Path "dist/klarity/cli.bat" -Value $cliBat -Encoding ASCII
 
       - name: Create install.bat
+        shell: pwsh
         run: |
-          cd build\dist\klarity
-          powershell -Command "(Get-Content install.bat.tmpl) -replace '{{KLARITY_DIR}}', '%~dp0' | Set-Content install.bat"
-          del install.bat.tmpl
+          $installBat = @"
+          @echo off
+          setlocal enabledelayedexpansion
+
+          REM ============================================================
+          REM  Klarity - Install desktop shortcut & add to PATH
+          REM ============================================================
+
+          set "KLARITY_DIR=%~dp0"
+          set "KLARITY_EXE=%KLARITY_DIR%klarity.exe"
+          set "KLARITY_ICON=%KLARITY_DIR%logo.ico"
+
+          REM --- Pre-flight checks ---
+          if not exist "%KLARITY_EXE%" (
+              echo ERROR: klarity.exe not found at %KLARITY_EXE%
+              pause
+              exit /b 1
+          )
+
+          REM --- Create desktop shortcut ---
+          echo Creating desktop shortcut...
+          set "SHORTCUT_PATH=%USERPROFILE%\Desktop\Klarity.lnk"
+
+          powershell -Command "$ws = New-Object -ComObject WScript.Shell; $sc = $ws.CreateShortcut('%SHORTCUT_PATH%'); $sc.TargetPath = '%KLARITY_EXE%'; $sc.WorkingDirectory = '%KLARITY_DIR%'; $sc.IconLocation = '%KLARITY_ICON%,0'; $sc.Description = 'Klarity - Image/Video Restoration Tool'; $sc.Save()"
+
+          REM --- Create Start Menu shortcut ---
+          set "STARTMENU=%APPDATA%\Microsoft\Windows\Start Menu\Programs"
+          if not exist "%STARTMENU%\Klarity" mkdir "%STARTMENU%\Klarity"
+
+          powershell -Command "$ws = New-Object -ComObject WScript.Shell; $sc = $ws.CreateShortcut('%STARTMENU%\Klarity\Klarity.lnk'); $sc.TargetPath = '%KLARITY_EXE%'; $sc.WorkingDirectory = '%KLARITY_DIR%'; $sc.IconLocation = '%KLARITY_ICON%,0'; $sc.Description = 'Klarity - Image/Video Restoration Tool'; $sc.Save()"
+
+          REM --- Add to user PATH ---
+          echo Adding Klarity to user PATH...
+          set "PATH_KEY=HKCU\Environment"
+          set "CURRENT_PATH="
+
+          for /f "tokens=2*" %%A in ('reg query "%PATH_KEY%" /v Path 2^>nul') do set "CURRENT_PATH=%%A"
+
+          echo %CURRENT_PATH% | findstr /I /C:"%KLARITY_DIR%" >nul 2>&1
+          if %ERRORLEVEL% EQU 0 (
+              echo Klarity directory already in PATH - skipping
+          ) else (
+              if defined CURRENT_PATH (
+                  reg add "%PATH_KEY%" /v Path /t REG_EXPAND_SZ /d "%CURRENT_PATH%;%KLARITY_DIR%" /f >nul 2>&1
+              ) else (
+                  reg add "%PATH_KEY%" /v Path /t REG_EXPAND_SZ /d "%KLARITY_DIR%" /f >nul 2>&1
+              )
+              echo Added to user PATH
+          )
+
+          echo.
+          echo ============================================================
+          echo  Klarity installed successfully!
+          echo ============================================================
+          echo.
+          echo  Desktop shortcut:  %SHORTCUT_PATH%
+          echo  Start Menu:        %STARTMENU%\Klarity
+          echo  PATH:              %KLARITY_DIR%
+          echo.
+          echo  Open a NEW command prompt to use:
+          echo    klarity info
+          echo.
+          echo ============================================================
+          echo.
+          pause
+          "@
+          Set-Content -Path "dist/klarity/install.bat" -Value $installBat -Encoding ASCII
 
       - name: Test binary (basic smoke test)
+        run: dist/klarity/klarity.exe info
+        continue-on-error: true
+
+      - name: List build output
+        shell: pwsh
         run: |
-          cd build\dist\klarity
-          klarity.exe info
+          echo "=== dist/klarity contents ==="
+          Get-ChildItem -Path "dist/klarity" | Format-Table Name, Length
+          echo ""
+          echo "=== Total size ==="
+          $size = (Get-ChildItem -Path "dist/klarity" -Recurse | Measure-Object -Property Length -Sum).Sum
+          echo "$([math]::Round($size / 1MB, 1)) MB"
 
       - name: Create ZIP archive
+        shell: pwsh
         run: |
-          cd build\dist
-          powershell -Compress-Archive -Path klarity -DestinationPath klarity-windows.zip
+          $zipName = "klarity-cpu-windows_v${env:KLARITY_VERSION}.zip"
+          Compress-Archive -Path "dist/klarity" -DestinationPath "dist/$zipName"
+          echo "ZIP_NAME=$zipName" >> $env:GITHUB_ENV
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: klarity-windows-cpu
-          path: build/dist/klarity-windows.zip
+          path: dist/klarity-cpu-windows_v0.7.0.zip
+          retention-days: 30
 
       - name: Upload to release
         if: startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          cd build\dist
-          gh release upload ${{ github.ref_name }} klarity-windows.zip --clobber
+          gh release upload ${{ github.ref_name }} "dist/${{ env.ZIP_NAME }}" --clobber

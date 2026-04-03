@@ -24,6 +24,19 @@ from PyQt5.QtGui import (
     QMovie, QWheelEvent, QIcon
 )
 
+# --- Frozen binary support (PyInstaller) ---
+def _get_app_dir():
+    """Return the directory where the binary (or script) lives."""
+    if getattr(sys, 'frozen', False):
+        return os.path.dirname(sys.executable)
+    return os.path.dirname(os.path.abspath(__file__))
+
+def _get_klarity_cmd():
+    """Return the command prefix for invoking klarity."""
+    if getattr(sys, 'frozen', False):
+        return [sys.executable]
+    return [sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'klarity.py')]
+
 THEME = {
     'background': '#0A0A0A',
     'surface': '#1a1a1a',
@@ -327,7 +340,7 @@ class ProcessingThread(QThread):
                 stderr=subprocess.STDOUT,
                 text=True,
                 bufsize=1,
-                cwd=os.path.dirname(os.path.abspath(__file__))
+                cwd=_get_app_dir()
             )
 
             output_file = None
@@ -1530,7 +1543,7 @@ class KlarityGUI(QMainWindow):
         self.setMinimumSize(800, 600)
         self.resize(1000, 700)
 
-        logo_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logo.png')
+        logo_path = os.path.join(_get_app_dir(), 'logo.png')
         if os.path.exists(logo_path):
             window_icon = QIcon(logo_path)
             for size in [16, 22, 32, 48, 64, 128, 256]:
@@ -1924,11 +1937,10 @@ class KlarityGUI(QMainWindow):
         self.download_btn.setEnabled(False)
 
         def download():
-            script_dir = os.path.dirname(os.path.abspath(__file__))
-            cmd = [sys.executable, os.path.join(script_dir, "klarity.py"), "download-models"]
+            cmd = _get_klarity_cmd() + ["download-models"]
             if mode == "lite":
-                cmd.insert(3, "-lite")
-            subprocess.run(cmd, cwd=script_dir)
+                cmd.append("-lite")
+            subprocess.run(cmd, cwd=_get_app_dir())
 
         thread = threading.Thread(target=download)
         thread.start()
@@ -2095,9 +2107,6 @@ class KlarityGUI(QMainWindow):
             QMessageBox.warning(self, "No Input", "Please select an input file first.")
             return
 
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        klarity_path = os.path.join(script_dir, "klarity.py")
-
         mode = "heavy" if self.mode_combo.currentIndex() == 0 else "lite"
 
         proc_modes = [
@@ -2111,7 +2120,7 @@ class KlarityGUI(QMainWindow):
         frame_mult = "2" if self.frame_combo.currentIndex() == 0 else "4"
         device = self.device_combo.currentText().lower()
 
-        cmd = [sys.executable, klarity_path, f"-{mode}", proc_mode, self.input_path, "--json-progress"]
+        cmd = _get_klarity_cmd() + [f"-{mode}", proc_mode, self.input_path, "--json-progress"]
 
         if proc_mode in ["upscale", "full", "full-frame-gen"]:
             cmd.extend(["--upscale", upscale])
@@ -2284,7 +2293,7 @@ def main():
     app.setApplicationDisplayName('Klarity')
     app.setDesktopFileName('klarity')
 
-    logo_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logo.png')
+    logo_path = os.path.join(_get_app_dir(), 'logo.png')
     if os.path.exists(logo_path):
         app_icon = QIcon(logo_path)
         app.setWindowIcon(app_icon)

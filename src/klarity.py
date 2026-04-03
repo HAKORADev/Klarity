@@ -2,6 +2,41 @@ import os
 import sys
 import argparse
 import glob
+
+# --- Frozen binary support (PyInstaller) ---
+if getattr(sys, 'frozen', False):
+    BINARY_DIR = os.path.dirname(sys.executable)
+    # On Windows onedir, _internal is next to the exe
+    _internal = os.path.join(BINARY_DIR, '_internal')
+    if os.path.isdir(_internal):
+        BUNDLED_DIR = _internal
+    else:
+        BUNDLED_DIR = BINARY_DIR
+    SCRIPT_DIR = BUNDLED_DIR
+    MODELS_DIR = os.path.join(BINARY_DIR, 'models')
+    TEMP_DIR = os.path.join(BINARY_DIR, 'tmp')
+else:
+    BINARY_DIR = os.path.dirname(os.path.abspath(__file__))
+    BUNDLED_DIR = BINARY_DIR
+    SCRIPT_DIR = BINARY_DIR
+    MODELS_DIR = os.path.join(SCRIPT_DIR, 'models')
+    TEMP_DIR = os.path.join(SCRIPT_DIR, 'tmp')
+
+# Windows: hide console window when running in GUI mode (no cli/info args)
+if sys.platform == 'win32' and getattr(sys, 'frozen', False):
+    _cli_args = {'cli', 'info', 'download-models', '-h', '--help'}
+    if not any(a in sys.argv for a in _cli_args):
+        try:
+            import ctypes
+            kernel32 = ctypes.WinDLL('kernel32')
+            user32 = ctypes.WinDLL('user32')
+            hwnd = kernel32.GetConsoleWindow()
+            if hwnd:
+                user32.ShowWindow(hwnd, 0)
+        except Exception:
+            pass
+
+import glob
 import shutil
 import subprocess
 import time
@@ -41,9 +76,7 @@ except ImportError:
         }
     MODEL_INFO = {}
 
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-MODELS_DIR = os.path.join(SCRIPT_DIR, "models")
-TEMP_DIR = os.path.join(SCRIPT_DIR, "tmp")
+# SCRIPT_DIR, MODELS_DIR, TEMP_DIR are set above for frozen binary support
 
 IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.tif', '.webp'}
 VIDEO_EXTENSIONS = {'.mp4', '.avi', '.mov', '.mkv', '.webm', '.flv', '.wmv', '.m4v'}
@@ -366,7 +399,7 @@ def load_upscale_model():
         return upscale_model
     mode = get_model_mode()
     model_paths = get_model_paths()
-    sys.path.insert(0, SCRIPT_DIR)
+    sys.path.insert(0, BUNDLED_DIR)
     from sr_arch import RRDBNet, SRVGGNetCompact
     if mode == 'heavy':
         model = RRDBNet(
@@ -406,7 +439,7 @@ def load_framegen_model():
         return framegen_model
     mode = get_model_mode()
     model_paths = get_model_paths()
-    sys.path.insert(0, SCRIPT_DIR)
+    sys.path.insert(0, BUNDLED_DIR)
     from rife_arch import RIFE
     model = RIFE(mode=mode)
     model.load_model(MODELS_DIR, mode=mode)
