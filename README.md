@@ -248,9 +248,8 @@ Each component has its own license:
 
 ## Links
 
-- **🤗 HuggingFace Space:** https://huggingface.co/spaces/HAKORADev/Klarity
-- **🧪 Google Colab:** https://colab.research.google.com/drive/14AaMnyz5sBuky2yOk-QmDhYtkh9V7o-3?usp=sharing
-- **Issues:** https://github.com/HAKORADev/Klarity/issues
+- **🤗 HuggingFace Space:** [Go To Demo Space](https://huggingface.co/spaces/HAKORADev/Klarity)
+- **🧪 Google Colab:** [open Notebook](https://colab.research.google.com/drive/14AaMnyz5sBuky2yOk-QmDhYtkh9V7o-3?usp=sharing)
 
 > 📝 **Note:** The HuggingFace demo uses **Lite models** and supports **image processing only**. For Heavy models and video support, use the **desktop version** or the **Google Colab notebook**, which provides the full experience with Heavy models and video processing — just like running it on a real PC except GUI is desktop-only.
 
