@@ -5,6 +5,9 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/HAKORADev/Klarity/releases/latest">
+    <img src="https://img.shields.io/badge/%F0%9F%93%A6%20Release-v0.7.0-green?style=for-the-badge" alt="Latest Release"/>
+  </a>
   <a href="https://colab.research.google.com/drive/14AaMnyz5sBuky2yOk-QmDhYtkh9V7o-3?usp=sharing">
     <img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/>
   </a>
@@ -14,6 +17,8 @@
 </p>
 
 **Klarity** is a local, free, offline AI-powered image and video restoration tool that delivers professional-grade denoising, deblurring, upscaling, and frame generation. Built for creators, editors, and anyone who needs to enhance visual content without subscription fees.
+
+📦 **Pre-built binaries available** — no Python or setup needed. Grab the [latest release](https://github.com/HAKORADev/Klarity/releases/latest) with CPU binaries for Windows and Linux, download, extract, and run.
 
 🤖 **For AI agents and automated tools:** See [Bots.md](Bots.md)
 
