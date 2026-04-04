@@ -52,7 +52,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path "dist/klarity/models"
           New-Item -ItemType Directory -Force -Path "dist/klarity/tmp"
 
-      - name: Create cli.bat
+      - name: Create cli.bat and cmd.bat
         shell: pwsh
         run: |
           $cliBat = @"
@@ -61,6 +61,13 @@ jobs:
           "%~dp0klarity.exe" cli
           "@
           Set-Content -Path "dist/klarity/cli.bat" -Value $cliBat -Encoding ASCII
+
+          $cmdBat = @"
+          @echo off
+          REM Klarity - Open command prompt in this directory
+          start cmd /k "cd /d %~dp0"
+          "@
+          Set-Content -Path "dist/klarity/cmd.bat" -Value $cmdBat -Encoding ASCII
 
       - name: Create install.bat
         shell: pwsh
