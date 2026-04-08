@@ -1,7 +1,7 @@
 # Klarity - AI Image/Video Restoration
 
 <p align="center">
-  <img src="logo.png" alt="Klarity Logo" width="128" height="128"/>
+  <img src="src/logo.png" alt="Klarity Logo" width="128" height="128"/>
 </p>
 
 <p align="center">
