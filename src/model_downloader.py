@@ -360,17 +360,6 @@ def ensure_models(script_dir, model_paths, auto_download=True, prompt=True, mode
     print(f"\nAll {mode} models downloaded successfully!")
     return True
 
-def get_model_paths_from_main(deblur_model, denoise_model, upscale_model, framegen_model_dir, mode=None):
-    if mode is None:
-        mode = _model_mode
-    suffix = f'-{mode}'
-    return {
-        'deblur': deblur_model.replace('.pth', f'{suffix}.pth') if not deblur_model.endswith(f'{suffix}.pth') else deblur_model,
-        'denoise': denoise_model.replace('.pth', f'{suffix}.pth') if not denoise_model.endswith(f'{suffix}.pth') else denoise_model,
-        'upscale': upscale_model.replace('.pth', f'{suffix}.pth') if not upscale_model.endswith(f'{suffix}.pth') else upscale_model,
-        'rife': os.path.join(models_dir, f'framegen{suffix}.pkl'),
-    }
-
 if __name__ == '__main__':
     print("Model Downloader Test")
     print("="*60)
