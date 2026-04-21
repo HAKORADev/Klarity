@@ -4,3 +4,4 @@ numpy
 tqdm
 requests
 PyQt5
+einops

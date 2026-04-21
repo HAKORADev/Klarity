@@ -6,7 +6,7 @@
 
 <p align="center">
   <a href="https://github.com/HAKORADev/Klarity/releases/latest">
-    <img src="https://img.shields.io/badge/%F0%9F%93%A6%20Release-v0.7.0-green?style=for-the-badge" alt="Latest Release"/>
+    <img src="https://img.shields.io/badge/%F0%9F%93%A6%20Release-v0.7.5-green?style=for-the-badge" alt="Latest Release"/>
   </a>
   <a href="https://colab.research.google.com/drive/14AaMnyz5sBuky2yOk-QmDhYtkh9V7o-3?usp=sharing">
     <img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/>
@@ -75,7 +75,7 @@ Klarity offers nine distinct processing modes, each designed for specific enhanc
 
 | Mode | Models | Download | Quality | Speed |
 |------|--------|----------|---------|-------|
-| **Heavy** (default) | NAFNet-width64, RealESRGAN-x4plus, RIFE v4.25 | ~785 MB | Best | Slower |
+| **Heavy** (default) | NAFNet-width64, Real-HAT-GAN-sharper, RIFE v4.25 | ~888 MB | Best | Slower |
 | **Lite** | NAFNet-width32, RealESRGAN-general-x4v3, RIFE v4.17 | ~204 MB | Good | Faster |
 
 #### Performance Comparison
@@ -98,7 +98,7 @@ Klarity leverages state-of-the-art open-source models for professional-grade res
 
 - **Denoising:** [NAFNet-SIDD](https://github.com/megvii-research/NAFNet) — Neural networks for noise reduction
 - **Deblurring:** [NAFNet-GoPro](https://github.com/megvii-research/NAFNet) — Motion blur removal
-- **Upscaling:** [Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN) — 4x super-resolution
+- **Upscaling:** [Real-HAT-GAN](https://github.com/XPixelGroup/HAT) (Heavy) / [Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN) (Lite) — 4x super-resolution
 - **Frame Generation:** [RIFE](https://github.com/hzwer/Practical-RIFE) — AI frame interpolation
 
 ---
@@ -245,6 +245,7 @@ python src/klarity.py -lite full image.jpg
 
 Each component has its own license:
 - NAFNet: Apache 2.0
+- Real-HAT-GAN / HAT: Apache 2.0
 - Real-ESRGAN: BSD 3-Clause
 - RIFE: MIT
 - Klarity: MIT

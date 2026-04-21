@@ -28,8 +28,8 @@ GDRIVE_FILE_IDS_LITE = {
     'rife': '1e9Qb4rm20UAsO7h9VILDwrpvTSHWWW8b',
 }
 
-DIRECT_URLS_HEAVY = {
-    'upscale': 'https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth',
+GDRIVE_FILE_IDS_HEAVY_UPSCALE = {
+    'upscale': '1EioFq5-mKmv1uqta_Byd9cgXp9SU3zjj',
 }
 
 DIRECT_URLS_LITE = {
@@ -54,9 +54,9 @@ MODEL_INFO = {
         'target_lite': 'denoise-lite.pth',
     },
     'upscale': {
-        'name_heavy': 'Real-ESRGAN x4plus (Upscale Heavy)',
+        'name_heavy': 'Real-HAT-GAN-sharper (Upscale Heavy)',
         'name_lite': 'Real-ESRGAN general-x4v3 (Upscale Lite)',
-        'size_heavy': '~64 MB',
+        'size_heavy': '~167 MB',
         'size_lite': '~16 MB',
         'target_heavy': 'upscale-heavy.pth',
         'target_lite': 'upscale-lite.pth',
@@ -256,8 +256,8 @@ def download_model(model_key, models_dir, temp_dir, mode=None):
     target_path = os.path.join(models_dir, target_filename)
     os.makedirs(os.path.dirname(target_path), exist_ok=True)
     if mode == 'heavy':
-        gdrive_ids = GDRIVE_FILE_IDS_HEAVY
-        direct_urls = DIRECT_URLS_HEAVY
+        gdrive_ids = {**GDRIVE_FILE_IDS_HEAVY, **GDRIVE_FILE_IDS_HEAVY_UPSCALE}
+        direct_urls = {}
     else:
         gdrive_ids = GDRIVE_FILE_IDS_LITE
         direct_urls = DIRECT_URLS_LITE
@@ -277,9 +277,11 @@ def download_model(model_key, models_dir, temp_dir, mode=None):
                 return success
         return False
     elif model_key == 'upscale':
-        url = direct_urls.get(model_key)
-        if url:
-            return download_with_progress(url, target_path, f"Downloading {name}")
+        file_id = gdrive_ids.get(model_key)
+        if file_id:
+            return download_gdrive_file(file_id, target_path, f"Downloading {name}")
+        elif direct_urls.get(model_key):
+            return download_with_progress(direct_urls[model_key], target_path, f"Downloading {name}")
         return False
     else:
         file_id = gdrive_ids.get(model_key)

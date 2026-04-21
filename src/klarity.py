@@ -286,7 +286,7 @@ def select_model_mode():
     print("\n  1. Heavy  - Better quality, larger models (default)")
     print("  2. Lite   - Faster processing, smaller models")
     print("")
-    print("  Heavy models: NAFNet-width64, Real-ESRGAN-x4plus, RIFE-v4.25")
+    print("  Heavy models: NAFNet-width64, Real-HAT-GAN-sharper, RIFE-v4.25")
     print("  Lite models:  NAFNet-width32, Real-ESRGAN-general-x4v3, RIFE-v4.17")
     while True:
         choice = input("\nSelect mode (1 or 2): ").strip()
@@ -367,18 +367,28 @@ def load_upscale_model():
     mode = get_model_mode()
     model_paths = get_model_paths()
     sys.path.insert(0, SCRIPT_DIR)
-    from sr_arch import RRDBNet, SRVGGNetCompact
     if mode == 'heavy':
-        model = RRDBNet(
-            num_in_ch=3,
-            num_out_ch=3,
-            num_feat=64,
-            num_block=23,
-            num_grow_ch=32,
-            scale=4
+        from hat_gan_arch import HAT
+        model = HAT(
+            upscale=4,
+            in_chans=3,
+            img_size=64,
+            window_size=16,
+            compress_ratio=3,
+            squeeze_factor=30,
+            conv_scale=0.01,
+            overlap_ratio=0.5,
+            img_range=1.,
+            depths=[6, 6, 6, 6, 6, 6],
+            embed_dim=180,
+            num_heads=[6, 6, 6, 6, 6, 6],
+            mlp_ratio=2,
+            upsampler='pixelshuffle',
+            resi_connection='1conv',
         )
-        model_name = "RealESRGAN-x4plus"
+        model_name = "Real-HAT-GAN-sharper"
     else:
+        from sr_arch import SRVGGNetCompact
         model = SRVGGNetCompact(
             num_in_ch=3,
             num_out_ch=3,
@@ -424,7 +434,7 @@ def pad_image(img, modulo=32):
     pad_h = new_h - h
     pad_w = new_w - w
     if pad_h > 0 or pad_w > 0:
-        img = torch.nn.functional.pad(img, (0, pad_w, 0, pad_h))
+        img = torch.nn.functional.pad(img, (0, pad_w, 0, pad_h), mode='reflect')
     return img, (h, w)
 
 def process_nafnet(model, img_tensor):
@@ -435,7 +445,7 @@ def process_nafnet(model, img_tensor):
 
 def process_upscale(model, img_tensor):
     with torch.no_grad():
-        padded, (h, w) = pad_image(img_tensor, modulo=4)
+        padded, (h, w) = pad_image(img_tensor, modulo=16)
         output = model(padded)
         new_h, new_w = h * 4, w * 4
         return output[:, :, :new_h, :new_w]

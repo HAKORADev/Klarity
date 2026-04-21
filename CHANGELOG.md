@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.7.5] - 2026-04-21
+
+### Changed
+
+- Replaced Heavy mode upscale model from **Real-ESRGAN-x4plus** to **Real-HAT-GAN-sharper** (Real_HAT_GAN_SRx4_sharper) for significantly improved perceptual quality
+  - Architecture upgraded from RRDBNet (CNN, 2021) to HAT (Hybrid Attention Transformer, 2023)
+  - Model parameters: 20.8M (up from ~16.7M)
+  - Weight file size: ~167 MB (up from ~64 MB)
+  - Source: [HAT by XPixelGroup](https://github.com/XPixelGroup/HAT) (Apache 2.0 License)
+  - New architecture file: `hat_gan_arch.py` (standalone, no basicsr dependency)
+  - Heavy download size increased from ~785 MB to ~888 MB
+- Updated `process_upscale()` padding to use `modulo=16` (window_size) with `reflect` mode for HAT compatibility
+- Updated `pad_image()` default padding mode to `reflect`
+
+### Added
+
+- `hat_gan_arch.py` — Standalone HAT (Hybrid Attention Transformer) architecture for Heavy upscale mode
+- `einops` to requirements.txt (dependency for HAT architecture)
+
+### Technical Notes
+
+- The Lite upscale model (Real-ESRGAN-general-x4v3) is unchanged
+- Disk filename for Heavy upscale model remains `upscale-heavy.pth`
+- `sr_arch.py` retains `SRVGGNetCompact` for Lite mode; `RRDBNet` is no longer used
+
+---
+
 ## [0.7.0] - 2026-03-29
 
 ### Added

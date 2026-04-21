@@ -1851,7 +1851,8 @@ class KlarityGUI(QMainWindow):
         <hr>
         <p><b>Credits:</b></p>
         <ul>
-        <li>Real-ESRGAN - Upscaling</li>
+        <li>HAT (Real-HAT-GAN-sharper) - Heavy Upscaling</li>
+        <li>Real-ESRGAN - Lite Upscaling</li>
         <li>NAFNet - Denoising/Deblurring</li>
         <li>RIFE - Frame Interpolation</li>
         </ul>
