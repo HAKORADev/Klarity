@@ -282,9 +282,20 @@ def attn_forward_new_xformers(self, hidden_states):
     key = self.head_to_batch_dim(key).contiguous()
     value = self.head_to_batch_dim(value).contiguous()
 
-    hidden_states = xformers.ops.memory_efficient_attention(
-        query, key, value, attn_bias=attention_mask, op=attention_op#, scale=scale
-    )
+    if is_xformers_available and xformers is not None:
+        hidden_states = xformers.ops.memory_efficient_attention(
+            query, key, value, attn_bias=attention_mask, op=attention_op
+        )
+    else:
+        batch2, head_dim2 = query.shape[0], query.shape[2]
+        attn_mask_torch = attention_mask
+        if attn_mask_torch is not None:
+            attn_mask_torch = attn_mask_torch.reshape(batch2 // self.heads, self.heads, attn_mask_torch.shape[1], attn_mask_torch.shape[2])
+        q2 = query.reshape(batch2 // self.heads, self.heads, query.shape[1], head_dim2)
+        k2 = key.reshape(batch2 // self.heads, self.heads, key.shape[1], head_dim2)
+        v2 = value.reshape(batch2 // self.heads, self.heads, value.shape[1], head_dim2)
+        hidden_states = torch.nn.functional.scaled_dot_product_attention(q2, k2, v2, attn_mask=attn_mask_torch)
+        hidden_states = hidden_states.reshape(batch2, query.shape[1], head_dim2)
     hidden_states = hidden_states.to(query.dtype)
     hidden_states = self.batch_to_head_dim(hidden_states)
 
@@ -341,8 +352,14 @@ def xformer_attn_forward(self, h_):
         .contiguous(),
         (q, k, v),
     )
-    out = xformers.ops.memory_efficient_attention(
-        q, k, v, attn_bias=None, op=self.attention_op)
+    if is_xformers_available and xformers is not None:
+        out = xformers.ops.memory_efficient_attention(
+            q, k, v, attn_bias=None, op=self.attention_op)
+    else:
+        q2 = q.reshape(B, 1, q.shape[1], C)
+        k2 = k.reshape(B, 1, k.shape[1], C)
+        v2 = v.reshape(B, 1, v.shape[1], C)
+        out = torch.nn.functional.scaled_dot_product_attention(q2, k2, v2).reshape(B * 1, q.shape[1], C)
 
     out = (
         out.unsqueeze(0)

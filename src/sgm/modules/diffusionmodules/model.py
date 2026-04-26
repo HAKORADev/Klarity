@@ -251,9 +251,15 @@ class MemoryEfficientAttnBlock(nn.Module):
             .contiguous(),
             (q, k, v),
         )
-        out = xformers.ops.memory_efficient_attention(
-            q, k, v, attn_bias=None, op=self.attention_op
-        )
+        if XFORMERS_IS_AVAILABLE and xformers is not None:
+            out = xformers.ops.memory_efficient_attention(
+                q, k, v, attn_bias=None, op=self.attention_op
+            )
+        else:
+            q2 = q.reshape(B, 1, q.shape[1], C)
+            k2 = k.reshape(B, 1, k.shape[1], C)
+            v2 = v.reshape(B, 1, v.shape[1], C)
+            out = torch.nn.functional.scaled_dot_product_attention(q2, k2, v2).reshape(B * 1, q.shape[1], C)
 
         out = (
             out.unsqueeze(0)

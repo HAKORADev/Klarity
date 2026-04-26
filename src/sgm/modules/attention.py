@@ -361,10 +361,15 @@ class MemoryEfficientCrossAttention(nn.Module):
             (q, k, v),
         )
 
-        # actually compute the attention, what we cannot get enough of
-        out = xformers.ops.memory_efficient_attention(
-            q, k, v, attn_bias=None, op=self.attention_op
-        )
+        if XFORMERS_IS_AVAILABLE and xformers is not None:
+            out = xformers.ops.memory_efficient_attention(
+                q, k, v, attn_bias=None, op=self.attention_op
+            )
+        else:
+            q2 = q.reshape(b, self.heads, q.shape[1], self.dim_head)
+            k2 = k.reshape(b, self.heads, k.shape[1], self.dim_head)
+            v2 = v.reshape(b, self.heads, v.shape[1], self.dim_head)
+            out = torch.nn.functional.scaled_dot_product_attention(q2, k2, v2).reshape(b * self.heads, q.shape[1], self.dim_head)
 
         # TODO: Use this directly in the attention operation, as a bias
         if exists(mask):
