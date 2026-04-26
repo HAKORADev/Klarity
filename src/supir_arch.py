@@ -7,7 +7,7 @@ import cv2
 import torch
 
 
-SUPIR_ROOT = '/home/z/my-project/SUPIR'
+SUPIR_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'SUPIR')
 
 SUPIR_POSITIVE_PROMPT = (
     'Cinematic, High Contrast, highly detailed, taken using a Canon EOS R camera, '
