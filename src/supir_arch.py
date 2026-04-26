@@ -1,44 +1,11 @@
 import os
 import sys
 import copy
-import subprocess
 
 import numpy as np
 import cv2
 import torch
 
-SUPER_REQUIRED_LIBS = [
-    'diffusers',
-    'transformers',
-    'accelerate',
-    'omegaconf',
-    'einops',
-    'open_clip_torch',
-    'k_diffusion',
-    'pytorch_lightning',
-]
-
-SUPER_PIP_NAMES = {
-    'open_clip_torch': 'open-clip-torch',
-}
-
-def check_super_deps():
-    installed = subprocess.check_output([sys.executable, '-m', 'pip', 'list', '--format=columns'], text=True)
-    missing = []
-    for lib in SUPER_REQUIRED_LIBS:
-        pip_name = SUPER_PIP_NAMES.get(lib, lib)
-        if pip_name.lower() not in installed.lower():
-            missing.append(pip_name)
-    if missing:
-        print(f"\n{'='*60}")
-        print(f"MISSING DEPENDENCIES for SUPER mode: {len(missing)}")
-        for m in missing:
-            print(f"  - {m}")
-        print(f"\nInstall them with:")
-        print(f"  pip install -r super-deps.txt")
-        print(f"Then re-run Klarity.")
-        print(f"{'='*60}")
-        raise RuntimeError(f"Missing SUPER dependencies: {', '.join(missing)}")
 
 SUPIR_ROOT = '/home/z/my-project/SUPIR'
 
@@ -64,7 +31,6 @@ class SUPIRProcessor:
     def load_model(self, device):
         if self._loaded:
             return
-        check_super_deps()
         sys.path.insert(0, SUPIR_ROOT)
         os.environ['CKPT_PTH_DIR'] = self.enhancer_dir
         ckpt_pth_path = os.path.join(SUPIR_ROOT, 'CKPT_PTH.py')
