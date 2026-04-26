@@ -7,7 +7,7 @@ import cv2
 import torch
 
 
-SUPIR_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'SUPIR')
+SUPIR_ROOT = os.path.dirname(os.path.abspath(__file__))
 
 SUPIR_POSITIVE_PROMPT = (
     'Cinematic, High Contrast, highly detailed, taken using a Canon EOS R camera, '
@@ -33,23 +33,19 @@ class SUPIRProcessor:
             return
         sys.path.insert(0, SUPIR_ROOT)
         os.environ['CKPT_PTH_DIR'] = self.enhancer_dir
-        ckpt_pth_path = os.path.join(SUPIR_ROOT, 'CKPT_PTH.py')
-        if os.path.exists(ckpt_pth_path):
-            import importlib.util
-            spec = importlib.util.spec_from_file_location("CKPT_PTH", ckpt_pth_path)
-            ckpt_pth_mod = importlib.util.module_from_spec(spec)
-            clip1_path = os.path.join(self.enhancer_dir, 'clip-vit-large-patch14')
-            clip2_path = os.path.join(self.enhancer_dir, 'open_clip_pytorch_model.bin')
-            if not os.path.exists(clip1_path):
-                clip1_path = None
-            if not os.path.exists(clip2_path):
-                clip2_path = None
-            ckpt_pth_mod.SDXL_CLIP1_PATH = clip1_path
-            ckpt_pth_mod.SDXL_CLIP2_CKPT_PTH = clip2_path
-            ckpt_pth_mod.LLAVA_CLIP_PATH = None
-            ckpt_pth_mod.LLAVA_MODEL_PATH = None
-            sys.modules['CKPT_PTH'] = ckpt_pth_mod
-            spec.loader.exec_module(ckpt_pth_mod)
+        import types
+        ckpt_pth_mod = types.ModuleType('CKPT_PTH')
+        clip1_path = os.path.join(self.enhancer_dir, 'clip-vit-large-patch14')
+        clip2_path = os.path.join(self.enhancer_dir, 'open_clip_pytorch_model.bin')
+        if not os.path.exists(clip1_path):
+            clip1_path = None
+        if not os.path.exists(clip2_path):
+            clip2_path = None
+        ckpt_pth_mod.SDXL_CLIP1_PATH = clip1_path
+        ckpt_pth_mod.SDXL_CLIP2_CKPT_PTH = clip2_path
+        ckpt_pth_mod.LLAVA_CLIP_PATH = None
+        ckpt_pth_mod.LLAVA_MODEL_PATH = None
+        sys.modules['CKPT_PTH'] = ckpt_pth_mod
         from omegaconf import OmegaConf
         from SUPIR.util import create_SUPIR_model, load_state_dict, HWC3, upscale_image
         self._HWC3 = HWC3
