@@ -277,27 +277,6 @@ def get_model_paths_for_super(script_dir):
         'enhancer': os.path.join(models_dir, 'SUPIR-v0Q.ckpt'),
     }
 
-def download_gdrive_large_file(file_id, output_path, desc="Downloading"):
-    try:
-        import gdown
-        url = f'https://drive.google.com/uc?id={file_id}'
-        os.makedirs(os.path.dirname(output_path) if os.path.dirname(output_path) else '.', exist_ok=True)
-        print(f"{desc} via gdown (ID: {file_id[:10]}...)")
-        gdown.download(url, output_path, quiet=False, fuzzy=True)
-        if os.path.exists(output_path) and os.path.getsize(output_path) > 1000000:
-            if not _is_html_file(output_path):
-                return True
-            os.remove(output_path)
-        print("gdown failed, trying requests fallback...")
-        return download_gdrive_file(file_id, output_path, desc)
-    except ImportError:
-        print("gdown not installed. Trying fallback method...")
-        return download_gdrive_file(file_id, output_path, desc)
-    except Exception as e:
-        print(f"gdown download failed: {e}")
-        print("Trying fallback method...")
-        return download_gdrive_file(file_id, output_path, desc)
-
 def ensure_super_models(script_dir, prompt=True):
     cleanup_temp_folder(script_dir)
     model_paths = get_model_paths_for_super(script_dir)
@@ -351,7 +330,7 @@ def ensure_super_models(script_dir, prompt=True):
             file_id = GDRIVE_FILE_IDS_SUPER.get(key)
             if file_id:
                 temp_path = os.path.join(temp_dir, 'SUPIR-v0Q.ckpt')
-                success = download_gdrive_large_file(file_id, temp_path, f"Downloading {name}")
+                success = download_gdrive_file(file_id, temp_path, f"Downloading {name}")
                 if success:
                     shutil.copy2(temp_path, target_path)
                     os.remove(temp_path)
