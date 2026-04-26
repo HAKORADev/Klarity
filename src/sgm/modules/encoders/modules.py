@@ -391,7 +391,7 @@ class FrozenT5Embedder(AbstractEmbModel):
             return_tensors="pt",
         )
         tokens = batch_encoding["input_ids"].to(self.device)
-        with torch.autocast("cuda", enabled=False):
+        with torch.autocast("cuda" if torch.cuda.is_available() else "cpu", enabled=False):
             outputs = self.transformer(input_ids=tokens)
         z = outputs.last_hidden_state
         return z
@@ -433,7 +433,7 @@ class FrozenByT5Embedder(AbstractEmbModel):
             return_tensors="pt",
         )
         tokens = batch_encoding["input_ids"].to(self.device)
-        with torch.autocast("cuda", enabled=False):
+        with torch.autocast("cuda" if torch.cuda.is_available() else "cpu", enabled=False):
             outputs = self.transformer(input_ids=tokens)
         z = outputs.last_hidden_state
         return z

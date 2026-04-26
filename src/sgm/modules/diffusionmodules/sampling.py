@@ -29,7 +29,7 @@ class BaseDiffusionSampler:
         num_steps: Union[int, None] = None,
         guider_config: Union[Dict, ListConfig, OmegaConf, None] = None,
         verbose: bool = False,
-        device: str = "cuda",
+        device: str = "cuda" if torch.cuda.is_available() else "cpu",
     ):
         self.num_steps = num_steps
         self.discretization = instantiate_from_config(discretization_config)
@@ -747,7 +747,7 @@ def gaussian_weights(tile_width, tile_height, nbatches):
                for y in range(latent_height)]
 
     weights = np.outer(y_probs, x_probs)
-    return torch.tile(torch.tensor(weights, device='cuda'), (nbatches, 4, 1, 1))
+    return torch.tile(torch.tensor(weights, device='cpu'), (nbatches, 4, 1, 1))
 
 
 def _sliding_windows(h: int, w: int, tile_size: int, tile_stride: int):

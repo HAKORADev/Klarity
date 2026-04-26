@@ -51,8 +51,10 @@ def is_power_of_two(n):
 
 def autocast(f, enabled=True):
     def do_autocast(*args, **kwargs):
-        with torch.cuda.amp.autocast(
-            enabled=enabled,
+        device_type = "cuda" if torch.cuda.is_available() else "cpu"
+        with torch.amp.autocast(
+            device_type=device_type,
+            enabled=enabled and torch.cuda.is_available(),
             dtype=torch.get_autocast_gpu_dtype(),
             cache_enabled=torch.is_autocast_cache_enabled(),
         ):

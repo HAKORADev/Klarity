@@ -9,6 +9,9 @@ from pytorch_lightning import seed_everything
 from torch.nn.functional import interpolate
 from SUPIR.utils.tilevae import VAEHook
 
+def _get_autocast_device():
+    return "cuda" if torch.cuda.is_available() else "cpu"
+
 class SUPIRModel(DiffusionEngine):
     def __init__(self, control_stage_config, ae_dtype='fp32', diffusion_dtype='fp32', p_p='', n_p='', *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -40,14 +43,14 @@ class SUPIRModel(DiffusionEngine):
 
     @torch.no_grad()
     def encode_first_stage(self, x):
-        with torch.autocast("cuda", dtype=self.ae_dtype):
+        with torch.autocast(_get_autocast_device(), dtype=self.ae_dtype):
             z = self.first_stage_model.encode(x)
         z = self.scale_factor * z
         return z
 
     @torch.no_grad()
     def encode_first_stage_with_denoise(self, x, use_sample=True, is_stage1=False):
-        with torch.autocast("cuda", dtype=self.ae_dtype):
+        with torch.autocast(_get_autocast_device(), dtype=self.ae_dtype):
             if is_stage1:
                 h = self.first_stage_model.denoise_encoder_s1(x)
             else:
@@ -64,7 +67,7 @@ class SUPIRModel(DiffusionEngine):
     @torch.no_grad()
     def decode_first_stage(self, z):
         z = 1.0 / self.scale_factor * z
-        with torch.autocast("cuda", dtype=self.ae_dtype):
+        with torch.autocast(_get_autocast_device(), dtype=self.ae_dtype):
             out = self.first_stage_model.decode(z)
         return out.float()
 
@@ -162,7 +165,7 @@ class SUPIRModel(DiffusionEngine):
 
         if not isinstance(p[0], list):
             batch['txt'] = [''.join([_p, p_p]) for _p in p]
-            with torch.cuda.amp.autocast(dtype=self.ae_dtype):
+            with torch.autocast(_get_autocast_device(), dtype=self.ae_dtype):
                 c, uc = self.conditioner.get_unconditional_conditioning(batch, batch_uc)
         else:
             assert len(p) == 1, 'Support bs=1 only for local prompt conditioning.'
@@ -170,7 +173,7 @@ class SUPIRModel(DiffusionEngine):
             c = []
             for i, p_tile in enumerate(p_tiles):
                 batch['txt'] = [''.join([p_tile, p_p])]
-                with torch.cuda.amp.autocast(dtype=self.ae_dtype):
+                with torch.autocast(_get_autocast_device(), dtype=self.ae_dtype):
                     if i == 0:
                         _c, uc = self.conditioner.get_unconditional_conditioning(batch, batch_uc)
                     else:

@@ -117,13 +117,13 @@ class DiffusionEngine(pl.LightningModule):
     @torch.no_grad()
     def decode_first_stage(self, z):
         z = 1.0 / self.scale_factor * z
-        with torch.autocast("cuda", enabled=not self.disable_first_stage_autocast):
+        with torch.autocast("cuda" if torch.cuda.is_available() else "cpu", enabled=not self.disable_first_stage_autocast and torch.cuda.is_available()):
             out = self.first_stage_model.decode(z)
         return out
 
     @torch.no_grad()
     def encode_first_stage(self, x):
-        with torch.autocast("cuda", enabled=not self.disable_first_stage_autocast):
+        with torch.autocast("cuda" if torch.cuda.is_available() else "cpu", enabled=not self.disable_first_stage_autocast and torch.cuda.is_available()):
             z = self.first_stage_model.encode(x)
         z = self.scale_factor * z
         return z

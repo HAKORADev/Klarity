@@ -123,7 +123,8 @@ class MixedCheckpointFunction(torch.autograd.Function):
             for key in ctx.input_tensors
         }
 
-        with torch.enable_grad(), torch.cuda.amp.autocast(**ctx.gpu_autocast_kwargs):
+        with torch.enable_grad(), torch.amp.autocast("cuda" if torch.cuda.is_available() else "cpu",
+            enabled=torch.cuda.is_available(), **ctx.gpu_autocast_kwargs):
             # Fixes a bug where the first op in run_function modifies the
             # Tensor storage in place, which is not allowed for detach()'d
             # Tensors.
@@ -185,7 +186,8 @@ class CheckpointFunction(torch.autograd.Function):
     @staticmethod
     def backward(ctx, *output_grads):
         ctx.input_tensors = [x.detach().requires_grad_(True) for x in ctx.input_tensors]
-        with torch.enable_grad(), torch.cuda.amp.autocast(**ctx.gpu_autocast_kwargs):
+        with torch.enable_grad(), torch.amp.autocast("cuda" if torch.cuda.is_available() else "cpu",
+            enabled=torch.cuda.is_available(), **ctx.gpu_autocast_kwargs):
             # Fixes a bug where the first op in run_function modifies the
             # Tensor storage in place, which is not allowed for detach()'d
             # Tensors.
