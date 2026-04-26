@@ -53,6 +53,10 @@ try:
     xformers.ops.memory_efficient_attention(_xf_q, _xf_k, _xf_v)
     XFORMERS_IS_AVAILABLE = True
 except:
+    try:
+        import xformers
+    except:
+        xformers = None
     XFORMERS_IS_AVAILABLE = False
     print("xformers memory_efficient_attention not available. Processing without...")
 

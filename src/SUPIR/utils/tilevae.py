@@ -79,6 +79,10 @@ try:
     xformers.ops.memory_efficient_attention(_xf_q, _xf_k, _xf_v)
     is_xformers_available = True
 except:
+    try:
+        import xformers
+    except:
+        xformers = None
     is_xformers_available = False
 
 sd_flag = True
