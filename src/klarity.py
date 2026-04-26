@@ -824,31 +824,21 @@ def process_image_full(img, step_bar=None, upscale_factor=4):
 
 def check_super_deps():
     required = ['diffusers', 'transformers', 'accelerate', 'omegaconf', 'einops', 'open_clip', 'k_diffusion', 'pytorch_lightning']
-    try:
-        import subprocess
-        result = subprocess.run(['pip', 'list', '--format=freeze'], capture_output=True, text=True)
-        installed = result.stdout.lower()
-        missing = []
-        aliases = {
-            'open_clip': 'open-clip-torch',
-            'k_diffusion': 'k-diffusion',
-            'pytorch_lightning': 'pytorch-lightning',
-        }
-        for dep in required:
-            pkg_name = aliases.get(dep, dep)
-            if pkg_name.replace('-', '_') not in installed.replace('-', '_'):
-                missing.append(dep)
-        if missing:
-            print("\n" + "="*60)
-            print("ERROR: Missing dependencies for SUPER mode!")
-            print("="*60)
-            print(f"Missing packages: {', '.join(missing)}")
-            print("\nInstall with: pip install -r super-deps.txt")
-            print("The super-deps.txt file is in the Klarity project root.")
-            print("="*60)
-            sys.exit(1)
-    except Exception as e:
-        print(f"Warning: Could not check SUPER dependencies: {e}")
+    missing = []
+    import importlib.util
+    for dep in required:
+        spec = importlib.util.find_spec(dep)
+        if spec is None:
+            missing.append(dep)
+    if missing:
+        print("\n" + "="*60)
+        print("ERROR: Missing dependencies for SUPER mode!")
+        print("="*60)
+        print(f"Missing packages: {', '.join(missing)}")
+        print("\nInstall with: pip install -r super-deps.txt")
+        print("The super-deps.txt file is in the Klarity project root.")
+        print("="*60)
+        sys.exit(1)
 
 def load_enhance_super_model():
     global enhance_super_model
