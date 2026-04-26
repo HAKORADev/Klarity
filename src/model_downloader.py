@@ -33,7 +33,7 @@ GDRIVE_FILE_IDS_HEAVY_UPSCALE = {
 }
 
 GDRIVE_FILE_IDS_SUPER = {
-    'enhancer': '1yELzm5SvAi9e7kPcO_jPp2XkTs4vK6aR',
+    'enhancer': '1ohCIBV_RAej1zuiidHph5qXNuD4GRxO3',
 }
 
 DIRECT_URLS_LITE = {
@@ -73,9 +73,9 @@ MODEL_INFO = {
         'target_heavy': 'framegen-heavy.pkl',
         'target_lite': 'framegen-lite.pkl',
     },
-    'enhancer-super': {
+    'enhancer': {
         'name': 'SUPIR-v0Q (SUPER Enhancer)',
-        'size': '~6.7 GB',
+        'size': '~5 GB',
         'target': 'SUPIR-v0Q.ckpt',
     },
 }
@@ -243,6 +243,24 @@ def get_model_paths_for_super(script_dir):
         'enhancer': os.path.join(models_dir, 'SUPIR-v0Q.ckpt'),
     }
 
+def download_gdrive_large_file(file_id, output_path, desc="Downloading"):
+    try:
+        import gdown
+        url = f'https://drive.google.com/uc?id={file_id}'
+        os.makedirs(os.path.dirname(output_path) if os.path.dirname(output_path) else '.', exist_ok=True)
+        print(f"{desc} via gdown (ID: {file_id[:10]}...)")
+        gdown.download(url, output_path, quiet=False)
+        if os.path.exists(output_path) and os.path.getsize(output_path) > 1000000:
+            return True
+        return False
+    except ImportError:
+        print("gdown not installed. Trying fallback method...")
+        return download_gdrive_file(file_id, output_path, desc)
+    except Exception as e:
+        print(f"gdown download failed: {e}")
+        print("Trying fallback method...")
+        return download_gdrive_file(file_id, output_path, desc)
+
 def ensure_super_models(script_dir, prompt=True):
     cleanup_temp_folder(script_dir)
     model_paths = get_model_paths_for_super(script_dir)
@@ -293,64 +311,17 @@ def ensure_super_models(script_dir, prompt=True):
             enhancer_dir = os.path.join(script_dir, 'models', 'enhancer')
             os.makedirs(enhancer_dir, exist_ok=True)
             target_path = os.path.join(enhancer_dir, 'SUPIR-v0Q.ckpt')
-            file_id = GDRIVE_FILE_IDS_SUPER.get('enhancer')
+            file_id = GDRIVE_FILE_IDS_SUPER.get(key)
             if file_id:
-                download_path = os.path.join(temp_dir, 'super_download')
-                success = download_gdrive_file(file_id, download_path, f"Downloading {name}")
+                temp_path = os.path.join(temp_dir, 'SUPIR-v0Q.ckpt')
+                success = download_gdrive_large_file(file_id, temp_path, f"Downloading {name}")
                 if success:
-                    if os.path.isdir(download_path):
-                        src_path = None
-                        for root, dirs, files in os.walk(download_path):
-                            for f in files:
-                                if f == 'SUPIR-v0Q.ckpt':
-                                    src_path = os.path.join(root, f)
-                                    break
-                            if src_path:
-                                break
-                        if src_path:
-                            shutil.copy2(src_path, target_path)
-                            print(f"Copied: {src_path} -> {target_path}")
-                        else:
-                            print("Error: SUPIR-v0Q.ckpt not found in downloaded files.")
-                            print("The Google Drive folder may contain multiple files.")
-                            print("Please manually download SUPIR-v0Q.ckpt and place it in models/enhancer/")
-                            success = False
-                    else:
-                        try:
-                            with zipfile.ZipFile(download_path, 'r') as zf:
-                                file_list = zf.namelist()
-                                for f in file_list:
-                                    if f.endswith('SUPIR-v0Q.ckpt'):
-                                        with zf.open(f) as src, open(target_path, 'wb') as dst:
-                                            for chunk in iter(lambda: src.read(8192), b''):
-                                                dst.write(chunk)
-                                        print(f"Extracted: {f} -> {target_path}")
-                                        break
-                                else:
-                                    if os.path.getsize(download_path) > 1000000:
-                                        shutil.copy2(download_path, target_path)
-                                        print(f"Copied download -> {target_path}")
-                                    else:
-                                        print("Error: Could not find SUPIR-v0Q.ckpt in archive.")
-                                        success = False
-                        except zipfile.BadZipFile:
-                            if os.path.getsize(download_path) > 1000000:
-                                shutil.copy2(download_path, target_path)
-                                print(f"Copied download -> {target_path}")
-                            else:
-                                print("Error: Invalid download format.")
-                                success = False
-                    if os.path.exists(download_path):
-                        if os.path.isdir(download_path):
-                            shutil.rmtree(download_path)
-                        else:
-                            os.remove(download_path)
-                    if success and os.path.exists(target_path):
-                        print(f"Successfully downloaded: {name}")
-                    else:
-                        print(f"Failed to download: {name}")
-                        return False
+                    shutil.copy2(temp_path, target_path)
+                    os.remove(temp_path)
+                    print(f"Successfully downloaded: {name}")
                 else:
+                    if os.path.exists(temp_path):
+                        os.remove(temp_path)
                     print(f"Failed to download: {name}")
                     return False
             else:
