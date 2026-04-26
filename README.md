@@ -6,7 +6,7 @@
 
 <p align="center">
   <a href="https://github.com/HAKORADev/Klarity/releases/latest">
-    <img src="https://img.shields.io/badge/%F0%9F%93%A6%20Release-v0.7.5-green?style=for-the-badge" alt="Latest Release"/>
+    <img src="https://img.shields.io/badge/%F0%9F%93%A6%20Release-v0.8.0-green?style=for-the-badge" alt="Latest Release"/>
   </a>
   <a href="https://colab.research.google.com/drive/14AaMnyz5sBuky2yOk-QmDhYtkh9V7o-3?usp=sharing">
     <img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/>
@@ -54,9 +54,9 @@ python src/klarity.py cli
 
 ## Core Capabilities
 
-### 🎨 **9 Processing Modes**
+### 🎨 **11 Processing Modes**
 
-Klarity offers nine distinct processing modes, each designed for specific enhancement needs:
+Klarity offers eleven distinct processing modes, each designed for specific enhancement needs:
 
 | Mode | Description | Input | Output |
 |------|-------------|-------|--------|
@@ -68,27 +68,33 @@ Klarity offers nine distinct processing modes, each designed for specific enhanc
 | **Frame-Gen** | AI frame interpolation | Video | Video (higher FPS) |
 | **Clean-Frame-Gen** | Clean + Frame generation | Video | Video |
 | **Full-Frame-Gen** | Full pipeline + Frame generation | Video | Video |
+| **Enhance** | AI restoration (SUPIR) to 1024x1024 | Image/Video | Image (1024x1024) |
+| **Enhance-Frame-Gen** | AI restoration + Frame generation | Video | Video (higher FPS) |
 
 ---
 
-### ⚡ **Dual Model Modes**
+### ⚡ **Triple Model Modes**
 
 | Mode | Models | Download | Quality | Speed |
 |------|--------|----------|---------|-------|
 | **Heavy** (default) | NAFNet-width64, Real-HAT-GAN-sharper, RIFE v4.25 | ~888 MB | Best | Slower |
 | **Lite** | NAFNet-width32, RealESRGAN-general-x4v3, RIFE v4.17 | ~204 MB | Good | Faster |
+| **Super** | SUPIR-v0Q (SDXL-based), RIFE v4.25 | ~6.7 GB | Maximum | Slowest |
 
 #### Performance Comparison
 
-| Metric | Lite Mode | Heavy Mode |
-|--------|-----------|------------|
-| **Hardware Demand** | 🟢 **13x less demanding** | 🔴 Baseline |
-| **Processing Speed** | 🟢 **20x faster** | 🔴 Baseline |
-| **Quality Loss** | 🟡 ~20-28% quality trade-off | 🟢 Maximum quality |
-| **Minimum RAM** | 🟢 **4GB RAM** | 🔴 **8-16GB RAM** |
-| **Best For** | Quick previews, low-end systems | Final output, maximum fidelity |
+| Metric | Lite Mode | Heavy Mode | Super Mode |
+|--------|-----------|------------|------------|
+| **Hardware Demand** | 🟢 **13x less demanding** | 🔴 Baseline | 🔴 **~3x more demanding** |
+| **Processing Speed** | 🟢 **20x faster** | 🔴 Baseline | 🔴 **~10x slower** |
+| **Quality Loss** | 🟡 ~20-28% quality trade-off | 🟢 Maximum quality | 🟢 **Perceptual maximum** |
+| **Minimum RAM** | 🟢 **4GB RAM** | 🔴 **8-16GB RAM** | 🔴 **32GB+ RAM** |
+| **Minimum VRAM** | 🟢 **4GB** | 🟡 **6GB+** | 🔴 **24GB+** |
+| **Best For** | Quick previews, low-end systems | Final output, maximum fidelity | Severely degraded content |
 
-> 💡 **Pro Tip:** Use **Lite mode** for rapid iteration and previewing, then switch to **Heavy mode** for your final export.
+> 💡 **Pro Tip:** Use **Lite mode** for rapid iteration and previewing, then switch to **Heavy mode** for your final export. Use **Super mode** when content is severely degraded and traditional methods leave visible artifacts.
+
+> ⚠️ **Note:** Super mode requires **24GB+ VRAM** (GPU) or **32GB+ system memory** (CPU). Install extra dependencies with `pip install -r super-deps.txt`.
 
 ---
 
@@ -99,6 +105,7 @@ Klarity leverages state-of-the-art open-source models for professional-grade res
 - **Denoising:** [NAFNet-SIDD](https://github.com/megvii-research/NAFNet) — Neural networks for noise reduction
 - **Deblurring:** [NAFNet-GoPro](https://github.com/megvii-research/NAFNet) — Motion blur removal
 - **Upscaling:** [Real-HAT-GAN](https://github.com/XPixelGroup/HAT) (Heavy) / [Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN) (Lite) — 4x super-resolution
+- **AI Restoration:** [SUPIR](https://github.com/Fanghua-Yu/SUPIR) (Super) — SDXL-based diffusion restoration
 - **Frame Generation:** [RIFE](https://github.com/hzwer/Practical-RIFE) — AI frame interpolation
 
 ---
@@ -130,6 +137,11 @@ python src/klarity.py upscale photo.jpg --upscale 4
 python src/klarity.py clean image.jpg        # denoise + deblur
 python src/klarity.py full image.jpg         # full pipeline
 
+# SUPER mode (SUPIR AI restoration)
+python src/klarity.py -super enhance image.jpg
+python src/klarity.py enhance image.jpg          # auto-detects super
+python src/klarity.py enhance-frame-gen video.mp4 --multi 2
+
 # Video processing
 python src/klarity.py frame-gen video.mp4 --multi 2
 python src/klarity.py clean-frame-gen video.mp4 --multi 4
@@ -143,15 +155,15 @@ python src/klarity.py -lite full image.jpg
 
 ## System Requirements
 
-| Component | Minimum | Recommended |
-|-----------|---------|-------------|
-| **CPU** | 2 cores | 4+ cores |
-| **RAM** | 4GB | 16GB+ |
-| **GPU** | None (CPU works) | NVIDIA GTX 1060+ |
-| **VRAM** | N/A | 4GB+ |
-| **Storage** | 2GB | SSD recommended |
+| Component | Minimum | Recommended | SUPER Mode |
+|-----------|---------|-------------|------------|
+| **CPU** | 2 cores | 4+ cores | 8+ cores |
+| **RAM** | 4GB | 16GB+ | **32GB+** |
+| **GPU** | None (CPU works) | NVIDIA GTX 1060+ | **NVIDIA RTX 3090/4090** |
+| **VRAM** | N/A | 4GB+ | **24GB+** |
+| **Storage** | 2GB | SSD recommended | SSD recommended (~7GB models) |
 
-**Note:** Klarity works on CPU. GPU with CUDA significantly speeds up processing.
+**Note:** Klarity works on CPU. GPU with CUDA significantly speeds up processing. SUPER mode has substantially higher requirements due to the SDXL-based diffusion model.
 
 ---
 
@@ -217,6 +229,19 @@ python src/klarity.py -lite full image.jpg
 
 ---
 
+### SUPER Enhance: AI Restoration
+
+<p align="center">
+  <img src="assets/4_original.jpg" alt="Original Image" width="45%"/>
+  <img src="assets/4_enhanced.jpg" alt="SUPER Enhanced" width="45%"/>
+</p>
+
+<p align="center"><i>Left: Original — Right: SUPER Enhance (SUPIR-v0Q Quality preset)</i></p>
+
+> ✨ **SUPER mode** uses SUPIR's Stable Diffusion XL-based diffusion model to perform perceptual-driven AI restoration. Unlike traditional pipelines that target individual degradations, SUPIR reconstructs images through generative diffusion, producing results with superior perceptual quality — especially on severely degraded content with combined noise, blur, compression artifacts, and low resolution.
+
+---
+
 ### Frame Generation: 15FPS → 60FPS
 
 <p align="center">
@@ -248,6 +273,7 @@ Each component has its own license:
 - Real-HAT-GAN / HAT: Apache 2.0
 - Real-ESRGAN: BSD 3-Clause
 - RIFE: MIT
+- SUPIR: Apache 2.0
 - Klarity: MIT
 
 ---

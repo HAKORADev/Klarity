@@ -99,13 +99,26 @@ Help the user choose the right processing mode:
 | Enlarge images | Upscale | `python src/klarity.py upscale input.jpg --upscale 4` |
 | Clean up degraded image | Clean | `python src/klarity.py clean input.jpg` |
 | Maximum quality restoration | Full | `python src/klarity.py full input.jpg --upscale 4` |
+| AI-powered restoration (SUPIR) | Enhance (Super) | `python src/klarity.py enhance input.jpg` |
 | Smooth slow-motion video | Frame-Gen | `python src/klarity.py frame-gen video.mp4 --multi 4` |
 | Restore + smooth video | Clean-Frame-Gen | `python src/klarity.py clean-frame-gen video.mp4 --multi 2` |
 | Full restoration + smooth | Full-Frame-Gen | `python src/klarity.py full-frame-gen video.mp4 --multi 2` |
+| AI restore + smooth video | Enhance-Frame-Gen (Super) | `python src/klarity.py enhance-frame-gen video.mp4 --multi 2` |
 
 ---
 
 ## Hardware Recommendations
+
+### Super Mode (SUPIR)
+
+Use when:
+- GPU with 24GB+ VRAM (e.g., RTX 3090/4090) OR CPU with 32GB+ RAM
+- Content is severely degraded (combined noise, blur, compression, low resolution)
+- Traditional Heavy Full pipeline leaves visible artifacts
+- Perceptual quality is the absolute priority
+- Processing time is acceptable (significantly slower than Heavy)
+
+Requires extra dependencies: `pip install -r super-deps.txt`
 
 ### Heavy Mode (Default)
 
@@ -202,7 +215,9 @@ Klarity automatically adds suffixes to output files:
 | Upscale | `_upscaled` | `photo_upscaled.jpg` |
 | Clean | `_cleaned` | `photo_cleaned.jpg` |
 | Full | `_enhanced` | `photo_enhanced.jpg` |
+| Enhance (Super) | `_enhanced` | `photo_enhanced.jpg` |
 | Frame-Gen | `_generated` | `video_generated.mp4` |
+| Enhance-Frame-Gen (Super) | `_enhanced_generated` | `video_enhanced_generated.mp4` |
 
 ---
 
@@ -241,6 +256,14 @@ Solutions to suggest:
 2. For video, process shorter segments
 3. Close other applications
 4. Use CPU fallback: `--device cpu`
+5. For SUPER mode: Requires 24GB+ VRAM (GPU) or 32GB+ RAM (CPU) — no workaround for lower specs
+
+### "Missing dependencies for SUPER mode"
+
+Solution:
+```bash
+pip install -r super-deps.txt
+```
 
 ### "FFmpeg not found"
 
@@ -290,9 +313,11 @@ python src/klarity.py frame-gen ./videos/ --multi 2
 2. **Recommend Lite mode** for systems without dedicated GPU
 3. **Suggest Clean mode** for most restoration needs
 4. **Use Full mode** when user wants maximum quality
-5. **Frame generation is video-only** — doesn't work on images
-6. **Models download automatically** on first use if not pre-downloaded
-7. **Processing time varies greatly** — video processing can take hours
+5. **Suggest Super mode** when content is severely degraded or Heavy mode isn't enough — but warn about 24GB+ VRAM / 32GB+ RAM requirement
+6. **Frame generation is video-only** — doesn't work on images
+7. **Models download automatically** on first use if not pre-downloaded
+8. **Processing time varies greatly** — video processing can take hours; SUPER mode is significantly slower
+9. **SUPER mode requires extra deps** — check with `pip list` and install `super-deps.txt` if missing
 
 ---
 

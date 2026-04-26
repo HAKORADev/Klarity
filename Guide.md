@@ -10,9 +10,10 @@
   - [Upscale: Super Resolution](#upscale-super-resolution)
   - [Clean: Combined Denoise + Deblur](#clean-combined-denoise--deblur)
   - [Full: Complete Enhancement Pipeline](#full-complete-enhancement-pipeline)
+  - [SUPER Enhance: AI-Powered Restoration](#super-enhance-ai-powered-restoration)
   - [Frame Generation: AI Interpolation](#frame-generation-ai-interpolation)
   - [Combined Video Modes](#combined-video-modes)
-- [Model Modes: Heavy vs Lite](#model-modes-heavy-vs-lite)
+- [Model Modes: Heavy vs Lite vs Super](#model-modes-heavy-vs-lite-vs-super)
 - [AI Models Explained](#ai-models-explained)
 - [CLI Reference](#cli-reference)
 - [GUI Guide](#gui-guide)
@@ -61,14 +62,15 @@ Image processing is manageable on most systems. A 4K image processed through the
 
 **System Requirements Explained:**
 
-| Capability | CPU Only | GPU (4GB VRAM) | GPU (8GB+ VRAM) |
-|------------|----------|----------------|-----------------|
-| Image processing | Works (slow) | Fast | Very fast |
-| Video 1080p | Works (very slow) | Good | Excellent |
-| Video 4K | Painfully slow | May need Lite | Heavy mode OK |
-| Frame generation | Works | Good | Excellent |
+| Capability | CPU Only | GPU (4GB VRAM) | GPU (8GB+ VRAM) | GPU (24GB+ VRAM) |
+|------------|----------|----------------|-----------------|-------------------|
+| Image processing | Works (slow) | Fast | Very fast | Very fast |
+| Video 1080p | Works (very slow) | Good | Excellent | Excellent |
+| Video 4K | Painfully slow | May need Lite | Heavy mode OK | Heavy mode OK |
+| Frame generation | Works | Good | Excellent | Excellent |
+| SUPER enhance | Needs 32GB+ RAM | Not recommended | May work with offloading | Full speed |
 
-These aren't arbitrary numbers. They're based on actual testing across different hardware configurations.
+These aren't arbitrary numbers. They're based on actual testing across different hardware configurations. SUPER mode has substantially higher requirements due to the SDXL-based diffusion model — the autoencoder, U-Net, and CLIP encoders must all fit in memory simultaneously during inference.
 
 ---
 
@@ -265,6 +267,56 @@ Frame generation works best on consistent motion. Rapid scene changes, complex o
 
 ---
 
+### SUPER Enhance: AI-Powered Restoration
+
+**What It Does:**
+
+SUPER enhance uses SUPIR (Scaling Up Pyramidal Image Restoration) to perform perceptual-driven AI restoration. Unlike traditional methods that target specific degradations (noise, blur), SUPIR understands the semantic content of an image and reconstructs it using a Stable Diffusion XL-based diffusion model. This means it can simultaneously address noise, blur, compression artifacts, and low resolution in a single pass while generating plausible high-frequency details.
+
+**How It Works:**
+
+SUPIR encodes the input image into a latent representation using an autoencoder, then iteratively denoises it through 50 EDM (Euler Discrete Model) sampling steps. During each step, a CFG (Classifier-Free Guidance) schedule ramps from 4.0 to 7.5, progressively increasing the model's adherence to the learned prior. The result is decoded back to pixel space using Wavelet color fixing to preserve the original color distribution. All quality parameters are locked to the official "Quality" preset for maximum output fidelity.
+
+**Processing Flow:**
+```
+Input Image → Resize to 1024x1024 → SUPIR Diffusion (50 steps) → Output 1024x1024
+```
+
+**What Makes It Different:**
+
+Traditional restoration methods (NAFNet for denoise/deblur, ESRGAN for upscale) each target one specific degradation. SUPER enhance takes a fundamentally different approach — it treats the entire restoration problem as a generative task. Instead of removing individual artifacts, it reconstructs what the image should look like based on its learned understanding of natural images. This produces results that often exceed traditional pipelines in perceptual quality, especially for severely degraded inputs.
+
+**Why It's Useful:**
+
+- Severely degraded images where traditional methods leave visible artifacts
+- Old photographs with combined noise, blur, and resolution loss
+- Compressed images with blocking artifacts and color banding
+- AI-generated images that need upscaling with detail preservation
+- Any content where perceptual quality matters more than pixel-level accuracy
+
+**Best Practices:**
+
+SUPER enhance outputs at a fixed 1024x1024 resolution. The input is automatically resized before processing. For best results, use images that are roughly square or have important content centered. Very wide or very tall images will be distorted by the resize. Unlike Heavy/Lite modes, SUPER mode does not support separate denoise, deblur, or upscale operations — it handles everything in one pass.
+
+**Limitations:**
+
+SUPER enhance is the most resource-intensive mode in Klarity. It requires a minimum of 24GB VRAM on GPU or 32GB system memory on CPU. Processing is significantly slower than Heavy mode — a single image may take 30-60 seconds on GPU. Because it uses generative reconstruction, results may include plausible but fabricated details that were not in the original image. This is a trade-off for perceptual quality.
+
+**Technical Parameters (Quality Preset):**
+
+| Parameter | Value | Purpose |
+|-----------|-------|---------|
+| CFG Scale | 7.5 (linear from 4.0) | Guidance strength ramping during denoising |
+| EDM Steps | 50 | Sampling iterations |
+| S Churn | 5 | Stochasticity per step |
+| S Noise | 1.003 | Noise injection magnitude |
+| Color Fix | Wavelet | Preserves original color distribution |
+| AE Dtype | BF16 | Autoencoder precision (fp16 causes NaNs) |
+| Diff Dtype | FP16 | Diffusion model precision |
+| Restoration Scale | -1.0 | Full restoration mode |
+
+---
+
 ### Combined Video Modes
 
 **Clean-Frame-Gen:**
@@ -275,18 +327,22 @@ Denoise + Deblur + Frame Generation. For videos that need both restoration and s
 
 Complete pipeline plus frame generation. Maximum quality restoration with increased frame rate. This is the most intensive processing mode.
 
+**SUPER Enhance + Frame-Gen:**
+
+SUPIR AI restoration applied to every frame, followed by RIFE Heavy frame interpolation. This is the most computationally expensive mode in Klarity, combining the full diffusion-based restoration of SUPER enhance with smooth frame generation. Each video frame is individually processed through the SUPIR model at 1024x1024, then RIFE Heavy generates interpolated frames between them. Plan for very long processing times on video content.
+
 **Processing Flow:**
 ```
-Video → Extract Frames → Denoise All → Deblur All → [Upscale All] → Generate Frames → Compile Video
+Video → Extract Frames → [Denoise All → Deblur All → [Upscale All]] → Generate Frames → Compile Video
 ```
 
 **Memory and Time:**
 
-Full-frame-gen is computationally intensive. A 1-minute 1080p video at 4x frame generation with Heavy models may take significant time even on capable hardware. Plan accordingly for batch processing.
+Full-frame-gen is computationally intensive. A 1-minute 1080p video at 4x frame generation with Heavy models may take significant time even on capable hardware. SUPER enhance-frame-gen is substantially more demanding — each frame requires a full SUPIR diffusion pass before frame generation begins. Plan accordingly for batch processing.
 
 ---
 
-## Model Modes: Heavy vs Lite
+## Model Modes: Heavy vs Lite vs Super
 
 ### Heavy Models (Default)
 
@@ -296,10 +352,10 @@ Optimized for maximum quality, designed for systems with adequate resources.
 |-------|--------------|------|---------|
 | Deblur | NAFNet-width64 | ~260 MB | Blur removal |
 | Denoise | NAFNet-width64 | ~440 MB | Noise reduction |
-| Upscale | RealESRGAN-x4plus | ~64 MB | Super resolution |
+| Upscale | Real-HAT-GAN-sharper | ~167 MB | Super resolution |
 | Frame Gen | RIFE v4.25 | ~21 MB | Interpolation |
 
-**Total Download:** ~785 MB
+**Total Download:** ~888 MB
 
 ### Lite Models
 
@@ -314,6 +370,21 @@ Optimized for efficiency, designed for systems with limited resources or faster 
 
 **Total Download:** ~204 MB
 
+### SUPER Mode
+
+Uses the SUPIR-v0Q diffusion model for perceptual-driven AI restoration. Fundamentally different from Heavy and Lite — instead of targeting individual degradations, SUPIR reconstructs images using generative diffusion, producing results with superior perceptual quality.
+
+| Model | Architecture | Size | Purpose |
+|-------|--------------|------|---------|
+| Enhancer | SUPIR-v0Q (SDXL-based) | ~6.7 GB | Full AI restoration |
+| Frame Gen | RIFE v4.25 (Heavy) | ~21 MB | Interpolation |
+
+**Total Download:** ~6.7 GB (+ SDXL/CLIP dependencies)
+
+**Available Operations:** `enhance`, `enhance-frame-gen`
+
+SUPER mode does not provide separate denoise, deblur, or upscale operations — the SUPIR model handles all restoration in a single pass. Output is fixed at 1024x1024.
+
 ### Choosing Between Modes
 
 **Use Heavy when:**
@@ -327,6 +398,14 @@ Optimized for efficiency, designed for systems with limited resources or faster 
 - GPU has limited VRAM (4GB or less)
 - Processing large batches quickly
 - System has 8-12GB RAM
+
+**Use Super when:**
+- You have GPU with 24GB+ VRAM (e.g., RTX 3090/4090)
+- Or CPU with 32GB+ system memory
+- Perceptual quality matters more than pixel-level accuracy
+- Content is severely degraded (noise + blur + compression + low res)
+- Traditional pipeline (Heavy Full) leaves visible artifacts
+- You accept that processing is significantly slower
 
 ---
 
@@ -358,6 +437,26 @@ Many super-resolution models are trained on artificially downsampled images, whi
 - **x4plus (Heavy):** RRDBNet architecture with 23 residual blocks
 - **general-x4v3 (Lite):** SRVGGNetCompact with efficient convolution structure
 
+### SUPIR (Scaling Up Pyramidal Image Restoration)
+
+SUPIR represents a paradigm shift in image restoration. Instead of the traditional approach of training specialized networks for each degradation type, SUPIR leverages a Stable Diffusion XL model fine-tuned for restoration tasks. It treats restoration as a conditional image generation problem, where the degraded input guides the generation of a clean, high-quality output.
+
+**Why SUPIR:**
+
+Traditional restoration methods (NAFNet, ESRGAN) are discriminative — they learn to map degraded inputs to clean outputs directly. This works well for specific, known degradations but struggles with combined or severe degradation. SUPIR's generative approach means it can handle any combination of degradations because it reconstructs based on semantic understanding rather than artifact-specific correction. The quality preset in Klarity uses carefully tuned CFG scheduling, stochastic sampling, and Wavelet color fixing to maximize perceptual quality.
+
+**Architecture:**
+
+SUPIR is built on top of Stable Diffusion XL with additional components:
+- SDXL autoencoder (VAE) for latent encoding/decoding
+- Fine-tuned U-Net for diffusion-based restoration
+- CLIP-ViT-L/14 and CLIP-ViT-bigG for text/visual understanding
+- Wavelet-based color correction to preserve original color distribution
+
+**The BF16 Requirement:**
+
+SUPIR's autoencoder must run in bfloat16 precision. Using fp16 causes NaN (Not a Number) values in the output, producing completely corrupted images. This is a known limitation of the SDXL autoencoder architecture at reduced precision. Klarity enforces bf16 for the autoencoder while using fp16 for the diffusion model itself to balance quality and memory usage.
+
 ### RIFE (Real-Time Intermediate Flow Estimation)
 
 RIFE estimates optical flow between frames and uses it to generate intermediate frames at arbitrary time points.
@@ -380,6 +479,7 @@ Traditional frame interpolation used block matching or optical flow methods that
 ```bash
 -heavy              # Use heavy models (default)
 -lite               # Use lite models
+-super              # Use SUPER mode (SUPIR AI restoration)
 --device {auto,cpu,gpu}  # Device selection
 --cpu               # Force CPU (legacy)
 ```
@@ -393,6 +493,10 @@ python src/klarity.py deblur <input> [-o output]
 python src/klarity.py upscale <input> [--upscale 2|4] [-o output]
 python src/klarity.py clean <input> [-o output]
 python src/klarity.py full <input> [--upscale 2|4] [-o output]
+
+# SUPER mode
+python src/klarity.py enhance <input> [-o output]
+python src/klarity.py enhance-frame-gen <video> --multi 2|4 [--fps N] [-o output]
 
 # Video frame generation
 python src/klarity.py frame-gen <video> --multi 2|4 [--fps N] [-o output]
@@ -417,6 +521,13 @@ python src/klarity.py full old_photo.jpg --upscale 4
 
 # Lite mode for speed
 python src/klarity.py -lite full image.jpg
+
+# SUPER mode AI restoration
+python src/klarity.py -super enhance degraded_photo.jpg
+python src/klarity.py enhance degraded_photo.jpg
+
+# SUPER mode video restoration + frame gen
+python src/klarity.py -super enhance-frame-gen old_video.mp4 --multi 2
 
 # Video slow-motion
 python src/klarity.py frame-gen video.mp4 --multi 4 --fps 120
@@ -527,7 +638,14 @@ python src/klarity.py full photo.jpg ./images/ video.mp4
 
 - Check internet connection
 - Try manual download from model sources
-- Check disk space (~1GB for Heavy models)
+- Check disk space (~1GB for Heavy models, ~7GB for SUPER mode)
+
+**SUPER Mode Errors:**
+
+- "Missing dependencies for SUPER mode" — Install with `pip install -r super-deps.txt`
+- "Out of Memory" on SUPER — Requires 24GB+ VRAM (GPU) or 32GB+ RAM (CPU)
+- SUPIR produces NaN/corrupted output — Ensure bf16 is used (enforced automatically)
+- VERY slow processing on CPU for SUPER — This is expected; GPU strongly recommended
 
 **Poor Results:**
 

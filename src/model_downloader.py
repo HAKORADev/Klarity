@@ -32,6 +32,10 @@ GDRIVE_FILE_IDS_HEAVY_UPSCALE = {
     'upscale': '1EioFq5-mKmv1uqta_Byd9cgXp9SU3zjj',
 }
 
+GDRIVE_FILE_IDS_SUPER = {
+    'enhancer': '1yELzm5SvAi9e7kPcO_jPp2XkTs4vK6aR',
+}
+
 DIRECT_URLS_LITE = {
     'upscale': 'https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesr-general-x4v3.pth',
 }
@@ -69,14 +73,19 @@ MODEL_INFO = {
         'target_heavy': 'framegen-heavy.pkl',
         'target_lite': 'framegen-lite.pkl',
     },
+    'enhancer-super': {
+        'name': 'SUPIR-v0Q (SUPER Enhancer)',
+        'size': '~6.7 GB',
+        'target': 'SUPIR-v0Q.ckpt',
+    },
 }
 
 TEMP_DOWNLOAD_FOLDER = "the_temp_folder"
 
 def set_model_mode(mode):
     global _model_mode
-    if mode not in ('heavy', 'lite'):
-        raise ValueError(f"Invalid model mode: {mode}. Must be 'heavy' or 'lite'.")
+    if mode not in ('heavy', 'lite', 'super'):
+        raise ValueError(f"Invalid model mode: {mode}. Must be 'heavy', 'lite', or 'super'.")
     _model_mode = mode
 
 def get_model_mode():
@@ -227,6 +236,141 @@ def extract_rife_zip(zip_path, target_dir, mode='heavy'):
     except Exception as e:
         print(f"Extraction failed: {e}")
         return False
+
+def get_model_paths_for_super(script_dir):
+    models_dir = os.path.join(script_dir, 'models', 'enhancer')
+    return {
+        'enhancer': os.path.join(models_dir, 'SUPIR-v0Q.ckpt'),
+    }
+
+def ensure_super_models(script_dir, prompt=True):
+    cleanup_temp_folder(script_dir)
+    model_paths = get_model_paths_for_super(script_dir)
+    existing = []
+    missing = []
+    for key, path in model_paths.items():
+        if os.path.exists(path):
+            size = os.path.getsize(path)
+            if size > 1000:
+                existing.append(key)
+            else:
+                missing.append(key)
+        else:
+            missing.append(key)
+    if not missing:
+        print("All SUPER models found!")
+        return True
+    print(f"\nMissing SUPER models: {len(missing)}")
+    for key in missing:
+        info = MODEL_INFO.get(key, {})
+        name = info.get('name', key)
+        size = info.get('size', 'unknown size')
+        print(f"  - {name} ({size})")
+    if not check_internet_connection():
+        print("\n" + "="*60)
+        print("ERROR: No internet connection detected!")
+        print("Cannot download SUPER models. Please connect to the internet and try again.")
+        print("="*60)
+        return False
+    if prompt:
+        print("\nWould you like to download the missing SUPER models now? (y/n)")
+        try:
+            response = input("> ").strip().lower()
+            if response != 'y':
+                print("Download cancelled.")
+                return False
+        except EOFError:
+            pass
+    temp_dir = get_temp_download_folder(script_dir)
+    for key in missing:
+        info = MODEL_INFO.get(key, {})
+        name = info.get('name', key)
+        size = info.get('size', 'unknown')
+        print(f"\n{'='*60}")
+        print(f"Downloading: {name} ({size})")
+        print(f"{'='*60}")
+        try:
+            enhancer_dir = os.path.join(script_dir, 'models', 'enhancer')
+            os.makedirs(enhancer_dir, exist_ok=True)
+            target_path = os.path.join(enhancer_dir, 'SUPIR-v0Q.ckpt')
+            file_id = GDRIVE_FILE_IDS_SUPER.get('enhancer')
+            if file_id:
+                download_path = os.path.join(temp_dir, 'super_download')
+                success = download_gdrive_file(file_id, download_path, f"Downloading {name}")
+                if success:
+                    if os.path.isdir(download_path):
+                        src_path = None
+                        for root, dirs, files in os.walk(download_path):
+                            for f in files:
+                                if f == 'SUPIR-v0Q.ckpt':
+                                    src_path = os.path.join(root, f)
+                                    break
+                            if src_path:
+                                break
+                        if src_path:
+                            shutil.copy2(src_path, target_path)
+                            print(f"Copied: {src_path} -> {target_path}")
+                        else:
+                            print("Error: SUPIR-v0Q.ckpt not found in downloaded files.")
+                            print("The Google Drive folder may contain multiple files.")
+                            print("Please manually download SUPIR-v0Q.ckpt and place it in models/enhancer/")
+                            success = False
+                    else:
+                        try:
+                            with zipfile.ZipFile(download_path, 'r') as zf:
+                                file_list = zf.namelist()
+                                for f in file_list:
+                                    if f.endswith('SUPIR-v0Q.ckpt'):
+                                        with zf.open(f) as src, open(target_path, 'wb') as dst:
+                                            for chunk in iter(lambda: src.read(8192), b''):
+                                                dst.write(chunk)
+                                        print(f"Extracted: {f} -> {target_path}")
+                                        break
+                                else:
+                                    if os.path.getsize(download_path) > 1000000:
+                                        shutil.copy2(download_path, target_path)
+                                        print(f"Copied download -> {target_path}")
+                                    else:
+                                        print("Error: Could not find SUPIR-v0Q.ckpt in archive.")
+                                        success = False
+                        except zipfile.BadZipFile:
+                            if os.path.getsize(download_path) > 1000000:
+                                shutil.copy2(download_path, target_path)
+                                print(f"Copied download -> {target_path}")
+                            else:
+                                print("Error: Invalid download format.")
+                                success = False
+                    if os.path.exists(download_path):
+                        if os.path.isdir(download_path):
+                            shutil.rmtree(download_path)
+                        else:
+                            os.remove(download_path)
+                    if success and os.path.exists(target_path):
+                        print(f"Successfully downloaded: {name}")
+                    else:
+                        print(f"Failed to download: {name}")
+                        return False
+                else:
+                    print(f"Failed to download: {name}")
+                    return False
+            else:
+                print(f"No download source for: {name}")
+                return False
+        except KeyboardInterrupt:
+            print("\n\nDownload interrupted by user.")
+            cleanup_temp_folder(script_dir)
+            return False
+        except Exception as e:
+            print(f"Error downloading {key}: {e}")
+            return False
+    cleanup_temp_folder(script_dir)
+    model_paths = get_model_paths_for_super(script_dir)
+    for key, path in model_paths.items():
+        if not os.path.exists(path) or os.path.getsize(path) < 1000:
+            print(f"\nWarning: SUPER model {key} still missing after download attempt.")
+            return False
+    print("\nAll SUPER models downloaded successfully!")
+    return True
 
 def get_model_paths_for_mode(script_dir, mode=None):
     if mode is None:

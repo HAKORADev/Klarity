@@ -1594,7 +1594,7 @@ class KlarityGUI(QMainWindow):
         mode_layout = QVBoxLayout(mode_group)
 
         self.mode_combo = QComboBox()
-        self.mode_combo.addItems(["Heavy (Best Quality)", "Lite (Faster)"])
+        self.mode_combo.addItems(["Heavy (Best Quality)", "Lite (Faster)", "Super (SUPIR)"])
         self.mode_combo.setStyleSheet(get_combo_box_style())
         self.mode_combo.currentIndexChanged.connect(self.onModeChanged)
         mode_layout.addWidget(self.mode_combo)
@@ -1882,8 +1882,22 @@ class KlarityGUI(QMainWindow):
     def checkModels(self):
         script_dir = os.path.dirname(os.path.abspath(__file__))
         models_dir = os.path.join(script_dir, "models")
-
-        mode = "heavy" if self.mode_combo.currentIndex() == 0 else "lite"
+        mode_index = self.mode_combo.currentIndex()
+        if mode_index == 0:
+            mode = "heavy"
+        elif mode_index == 1:
+            mode = "lite"
+        else:
+            self.model_status.setText(f"✓ SUPER mode (SUPIR)")
+            self.model_status.setStyleSheet(f"color: {THEME['success']}; font-size: 11px;")
+            enhancer_path = os.path.join(models_dir, "enhancer", "SUPIR-v0Q.ckpt")
+            if os.path.exists(enhancer_path) and os.path.getsize(enhancer_path) > 1000:
+                self.download_btn.setVisible(False)
+            else:
+                self.model_status.setText(f"⚠ SUPER model missing")
+                self.model_status.setStyleSheet(f"color: {THEME['warning']}; font-size: 11px;")
+                self.download_btn.setVisible(True)
+            return
 
         model_files = {
             'deblur': f'deblur-{mode}.pth',
@@ -1910,16 +1924,58 @@ class KlarityGUI(QMainWindow):
 
     def onModeChanged(self, index):
         self.checkModels()
+        self.updateProcModes()
 
     def onProcModeChanged(self, index):
-        is_frame_mode = index >= 5
-        self.frame_combo.setEnabled(is_frame_mode)
+        current_mode = self.mode_combo.currentText()
+        is_super = current_mode == "Super (SUPIR)"
+        if is_super:
+            is_frame_mode = (index == 1)
+            self.frame_combo.setEnabled(is_frame_mode)
+            self.upscale_combo.setEnabled(False)
+        else:
+            is_frame_mode = index >= 5
+            self.frame_combo.setEnabled(is_frame_mode)
+            is_upscale_mode = index in [2, 4, 7]
+            self.upscale_combo.setEnabled(is_upscale_mode)
 
-        is_upscale_mode = index in [2, 4, 7]
-        self.upscale_combo.setEnabled(is_upscale_mode)
+    def updateProcModes(self):
+        current_mode_text = self.mode_combo.currentText()
+        is_super = current_mode_text == "Super (SUPIR)"
+        current_index = self.proc_mode_combo.currentIndex()
+        if is_super:
+            if hasattr(self, 'is_video') and self.is_video:
+                items = ["Enhance", "Enhance + Frame Gen"]
+            else:
+                items = ["Enhance"]
+        else:
+            if hasattr(self, 'is_video') and self.is_video:
+                items = [
+                    "Denoise", "Deblur", "Upscale",
+                    "Clean (Denoise+Deblur)", "Full (All)",
+                    "Frame Generation", "Clean + Frame Gen", "Full + Frame Gen"
+                ]
+            else:
+                items = [
+                    "Denoise", "Deblur", "Upscale",
+                    "Clean (Denoise+Deblur)", "Full (All)"
+                ]
+        self.proc_mode_combo.blockSignals(True)
+        self.proc_mode_combo.clear()
+        self.proc_mode_combo.addItems(items)
+        if current_index < len(items):
+            self.proc_mode_combo.setCurrentIndex(current_index)
+        self.proc_mode_combo.blockSignals(False)
+        self.onProcModeChanged(self.proc_mode_combo.currentIndex())
 
     def downloadModels(self):
-        mode = "heavy" if self.mode_combo.currentIndex() == 0 else "lite"
+        mode_index = self.mode_combo.currentIndex()
+        if mode_index == 0:
+            mode = "heavy"
+        elif mode_index == 1:
+            mode = "lite"
+        else:
+            mode = "super"
         self.model_status.setText("Downloading models...")
         self.model_status.setStyleSheet(f"color: {THEME['warning']}; font-size: 11px;")
         self.download_btn.setEnabled(False)
@@ -1929,6 +1985,8 @@ class KlarityGUI(QMainWindow):
             cmd = [sys.executable, os.path.join(script_dir, "klarity.py"), "download-models"]
             if mode == "lite":
                 cmd.insert(3, "-lite")
+            elif mode == "super":
+                cmd.insert(3, "-super")
             subprocess.run(cmd, cwd=script_dir)
 
         thread = threading.Thread(target=download)
@@ -1956,19 +2014,7 @@ class KlarityGUI(QMainWindow):
             video_exts = {'.mp4', '.avi', '.mov', '.mkv', '.webm', '.flv', '.wmv', '.m4v'}
             self.is_video = Path(path).suffix.lower() in video_exts
 
-            if self.is_video:
-                self.proc_mode_combo.clear()
-                self.proc_mode_combo.addItems([
-                    "Denoise", "Deblur", "Upscale",
-                    "Clean (Denoise+Deblur)", "Full (All)",
-                    "Frame Generation", "Clean + Frame Gen", "Full + Frame Gen"
-                ])
-            else:
-                self.proc_mode_combo.clear()
-                self.proc_mode_combo.addItems([
-                    "Denoise", "Deblur", "Upscale",
-                    "Clean (Denoise+Deblur)", "Full (All)"
-                ])
+            self.updateProcModes()
 
             self.loadMedia(path)
             self.updateProcessButton()
@@ -2099,13 +2145,28 @@ class KlarityGUI(QMainWindow):
         script_dir = os.path.dirname(os.path.abspath(__file__))
         klarity_path = os.path.join(script_dir, "klarity.py")
 
-        mode = "heavy" if self.mode_combo.currentIndex() == 0 else "lite"
+        mode_index = self.mode_combo.currentIndex()
+        if mode_index == 0:
+            mode = "heavy"
+        elif mode_index == 1:
+            mode = "lite"
+        else:
+            mode = "super"
 
-        proc_modes = [
-            "denoise", "deblur", "upscale",
-            "clean", "full",
-            "frame-gen", "clean-frame-gen", "full-frame-gen"
-        ]
+        current_mode_text = self.mode_combo.currentText()
+        is_super = current_mode_text == "Super (SUPIR)"
+
+        if is_super:
+            if self.is_video:
+                proc_modes = ["enhance", "enhance-frame-gen"]
+            else:
+                proc_modes = ["enhance"]
+        else:
+            proc_modes = [
+                "denoise", "deblur", "upscale",
+                "clean", "full",
+                "frame-gen", "clean-frame-gen", "full-frame-gen"
+            ]
         proc_mode = proc_modes[self.proc_mode_combo.currentIndex()]
 
         upscale = "2" if self.upscale_combo.currentIndex() == 0 else "4"
@@ -2114,11 +2175,14 @@ class KlarityGUI(QMainWindow):
 
         cmd = [sys.executable, klarity_path, f"-{mode}", proc_mode, self.input_path, "--json-progress"]
 
-        if proc_mode in ["upscale", "full", "full-frame-gen"]:
-            cmd.extend(["--upscale", upscale])
-
-        if proc_mode in ["frame-gen", "clean-frame-gen", "full-frame-gen"]:
-            cmd.extend(["--multi", frame_mult])
+        if is_super:
+            if proc_mode == "enhance-frame-gen":
+                cmd.extend(["--multi", frame_mult])
+        else:
+            if proc_mode in ["upscale", "full", "full-frame-gen"]:
+                cmd.extend(["--upscale", upscale])
+            if proc_mode in ["frame-gen", "clean-frame-gen", "full-frame-gen"]:
+                cmd.extend(["--multi", frame_mult])
 
         if device != "auto":
             cmd.extend(["--device", device])
@@ -2136,6 +2200,8 @@ class KlarityGUI(QMainWindow):
             'frame-gen': '_generated',
             'clean-frame-gen': '_clean_generated',
             'full-frame-gen': '_full_enhanced',
+            'enhance': '_enhanced',
+            'enhance-frame-gen': '_enhanced_generated',
         }
         suffix = suffix_map.get(proc_mode, '_processed')
         output_dir = self.output_path if self.output_path else str(input_p.parent)

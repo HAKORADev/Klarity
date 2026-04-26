@@ -21,7 +21,7 @@ warnings.filterwarnings("ignore")
 JSON_PROGRESS = False
 
 try:
-    from model_downloader import ensure_models, check_internet_connection, set_model_mode, get_model_mode, get_model_paths_for_mode, MODEL_INFO
+    from model_downloader import ensure_models, check_internet_connection, set_model_mode, get_model_mode, get_model_paths_for_mode, MODEL_INFO, ensure_super_models
 except ImportError:
     def ensure_models(*args, **kwargs):
         print("Warning: model_downloader module not found. Auto-download disabled.")
@@ -285,22 +285,27 @@ def select_model_mode():
     print("="*60)
     print("\n  1. Heavy  - Better quality, larger models (default)")
     print("  2. Lite   - Faster processing, smaller models")
+    print("  3. Super  - Maximum quality AI restoration (SUPIR, requires extra deps)")
     print("")
     print("  Heavy models: NAFNet-width64, Real-HAT-GAN-sharper, RIFE-v4.25")
     print("  Lite models:  NAFNet-width32, Real-ESRGAN-general-x4v3, RIFE-v4.17")
+    print("  Super model:  SUPIR-v0Q (AI restoration, ~6.7GB)")
     while True:
-        choice = input("\nSelect mode (1 or 2): ").strip()
+        choice = input("\nSelect mode (1, 2, or 3): ").strip()
         if choice == '1' or choice == '':
             return 'heavy'
         elif choice == '2':
             return 'lite'
+        elif choice == '3':
+            return 'super'
         else:
-            print(f"Invalid input: '{choice}'. Please enter 1 for Heavy or 2 for Lite.")
+            print(f"Invalid input: '{choice}'. Please enter 1, 2, or 3.")
 
 deblur_model = None
 denoise_model = None
 upscale_model = None
 framegen_model = None
+enhance_super_model = None
 
 def load_deblur_model():
     global deblur_model
@@ -632,6 +637,8 @@ def get_mode_suffix(mode):
         'frame-gen': '_generated',
         'clean-frame-gen': '_clean_generated',
         'full-frame-gen': '_full_enhanced',
+        'enhance': '_enhanced',
+        'enhance-frame-gen': '_enhanced_generated',
     }
     return suffixes.get(mode, '_processed')
 
@@ -815,6 +822,58 @@ def process_image_full(img, step_bar=None, upscale_factor=4):
     img = process_image_upscale(img, step_bar, upscale_factor)
     return img
 
+def check_super_deps():
+    required = ['diffusers', 'transformers', 'accelerate', 'omegaconf', 'einops', 'open_clip', 'k_diffusion', 'pytorch_lightning']
+    try:
+        import subprocess
+        result = subprocess.run(['pip', 'list', '--format=freeze'], capture_output=True, text=True)
+        installed = result.stdout.lower()
+        missing = []
+        aliases = {
+            'open_clip': 'open-clip-torch',
+            'k_diffusion': 'k-diffusion',
+            'pytorch_lightning': 'pytorch-lightning',
+        }
+        for dep in required:
+            pkg_name = aliases.get(dep, dep)
+            if pkg_name.replace('-', '_') not in installed.replace('-', '_'):
+                missing.append(dep)
+        if missing:
+            print("\n" + "="*60)
+            print("ERROR: Missing dependencies for SUPER mode!")
+            print("="*60)
+            print(f"Missing packages: {', '.join(missing)}")
+            print("\nInstall with: pip install -r super-deps.txt")
+            print("The super-deps.txt file is in the Klarity project root.")
+            print("="*60)
+            sys.exit(1)
+    except Exception as e:
+        print(f"Warning: Could not check SUPER dependencies: {e}")
+
+def load_enhance_super_model():
+    global enhance_super_model
+    if enhance_super_model is not None:
+        return enhance_super_model
+    check_super_deps()
+    sys.path.insert(0, SCRIPT_DIR)
+    from supir_arch import SUPIRProcessor
+    enhance_super_model = SUPIRProcessor(MODELS_DIR)
+    enhance_super_model.load_model(get_device())
+    print("Loaded enhance model: SUPER (SUPIR-v0Q)")
+    return enhance_super_model
+
+def process_image_enhance_super(img, step_bar=None):
+    if step_bar:
+        step_bar.update("SUPIR enhancing...")
+    else:
+        progress.set_step("SUPIR enhancing")
+        progress.print_status()
+    model = load_enhance_super_model()
+    h, w = img.shape[:2]
+    img_resized = cv2.resize(img, (1024, 1024), interpolation=cv2.INTER_LANCZOS4)
+    result = model.enhance(img_resized, get_device(), step_bar=step_bar)
+    return result
+
 def get_rife_scale():
     return 1.0
 
@@ -906,6 +965,82 @@ def process_video_multistep(video_path, output_path, steps, audio_path):
                    audio_path if os.path.exists(audio_path) else None,
                    desc="Compiling video")
     return new_width, new_height
+
+def process_video_enhance_super_frame_gen(video_path, output_path, multi=2, fps=None):
+    ensure_ffmpeg()
+    original_fps, frame_count, width, height = get_video_info(video_path)
+    min_fps = original_fps
+    max_fps = original_fps * multi
+    if fps is None:
+        fps = max_fps
+    elif fps < min_fps:
+        fps = max_fps
+    elif fps > max_fps:
+        fps = max_fps
+    frames_dir = os.path.join(TEMP_DIR, "frames")
+    enhanced_dir = os.path.join(TEMP_DIR, "enhanced")
+    gen_dir = os.path.join(TEMP_DIR, "generated")
+    audio_path = os.path.join(TEMP_DIR, "audio.aac")
+    if os.path.exists(TEMP_DIR):
+        shutil.rmtree(TEMP_DIR)
+    os.makedirs(TEMP_DIR, exist_ok=True)
+    progress.set_step("Extracting frames")
+    progress.print_status()
+    extract_frames(video_path, frames_dir, desc="Extracting frames")
+    extract_audio(video_path, audio_path)
+    frames = sorted([f for f in os.listdir(frames_dir) if f.endswith('.png')])
+    process_video_frames_step(frames_dir, enhanced_dir, frames, "SUPIR Enhancing frames", process_image_enhance_super)
+    progress.set_step(f"Generating x{multi}")
+    progress.print_status()
+    enhanced_frames = sorted([f for f in os.listdir(enhanced_dir) if f.endswith('.png')])
+    generate_frames_custom(enhanced_dir, gen_dir, enhanced_frames, multi)
+    final_frames_dir = gen_dir
+    if fps < max_fps:
+        progress.set_step("Blending frames")
+        progress.print_status()
+        final_frames_dir = blend_frames_for_fps(gen_dir, fps, max_fps)
+    progress.set_step("Compiling video")
+    progress.print_status()
+    frames_to_video(final_frames_dir, output_path, fps,
+                   audio_path if os.path.exists(audio_path) else None,
+                   desc="Compiling video")
+    shutil.rmtree(TEMP_DIR)
+
+def generate_frames_custom(frames_dir, output_dir, frames, multi=2):
+    model = load_framegen_model()
+    if len(frames) < 2:
+        raise ValueError("Need at least 2 frames for generation")
+    os.makedirs(output_dir, exist_ok=True)
+    scale = get_rife_scale()
+    output_idx = 0
+    total_pairs = len(frames) - 1
+    total_output_frames = len(frames) * multi - (multi - 1)
+    pbar = tqdm(total=total_output_frames, desc=f"Generating (x{multi})", unit="frame",
+              bar_format="{desc} | Frame {n_fmt}/{total_fmt} {bar:25} {percentage:5.1f}% | {elapsed}<{remaining} {postfix}")
+    for i in range(total_pairs):
+        pbar.set_postfix_str(f"| pair {i+1}/{total_pairs} [frame {i+1}\u2192{i+2}]")
+        img0 = cv2.imread(os.path.join(frames_dir, frames[i]))
+        img1 = cv2.imread(os.path.join(frames_dir, frames[i + 1]))
+        img0, (orig_h, orig_w) = pad_for_rife(img0, scale)
+        img1, _ = pad_for_rife(img1, scale)
+        img0_tensor = img2tensor(img0)
+        img1_tensor = img2tensor(img1)
+        cv2.imwrite(os.path.join(output_dir, f'{output_idx:08d}.png'), img0[:orig_h, :orig_w])
+        output_idx += 1
+        pbar.update(1)
+        for j in range(multi - 1):
+            timestep = (j + 1) / multi
+            with torch.no_grad():
+                mid = model.inference(img0_tensor, img1_tensor, timestep, scale)
+            mid_img = tensor2img(mid)
+            cv2.imwrite(os.path.join(output_dir, f'{output_idx:08d}.png'), mid_img[:orig_h, :orig_w])
+            output_idx += 1
+            pbar.update(1)
+    last_frame = cv2.imread(os.path.join(frames_dir, frames[-1]))
+    cv2.imwrite(os.path.join(output_dir, f'{output_idx:08d}.png'), last_frame)
+    pbar.update(1)
+    pbar.set_postfix_str("")
+    return total_output_frames
 
 def process_video_frame_gen(video_path, output_path, multi=2, fps=None):
     ensure_ffmpeg()
@@ -1051,6 +1186,7 @@ def process_video(video_path, output_path, mode, upscale_factor=4):
             ("Deblurring frames", process_image_deblur),
             (f"Upscaling frames (x{upscale_factor})", lambda img, step_bar=None: process_image_upscale(img, step_bar, upscale_factor)),
         ],
+        'enhance': [("SUPIR Enhancing frames", process_image_enhance_super)],
     }
     if mode not in mode_steps:
         raise ValueError(f"Unknown mode: {mode}")
@@ -1073,7 +1209,7 @@ def process_single_file(input_path, output_path, mode, multi=2, fps=None, upscal
     is_vid = is_video(input_path)
     if not is_img and not is_vid:
         raise ValueError(f"Unsupported format: {input_path.suffix}")
-    frame_gen_modes = ['frame-gen', 'clean-frame-gen', 'full-frame-gen']
+    frame_gen_modes = ['frame-gen', 'clean-frame-gen', 'full-frame-gen', 'enhance-frame-gen']
     if mode in frame_gen_modes and is_img:
         raise ValueError(f"Frame generation mode '{mode}' only works with videos, not images.")
     if output_path is None:
@@ -1090,6 +1226,8 @@ def process_single_file(input_path, output_path, mode, multi=2, fps=None, upscal
             process_video_clean_frame_gen(str(input_path), output_path, multi, fps)
         elif mode == 'full-frame-gen':
             process_video_full_frame_gen(str(input_path), output_path, multi, fps, upscale_factor)
+        elif mode == 'enhance-frame-gen':
+            process_video_enhance_super_frame_gen(str(input_path), output_path, multi, fps)
         else:
             process_video(str(input_path), output_path, mode, upscale_factor)
     else:
@@ -1102,6 +1240,7 @@ def process_single_file(input_path, output_path, mode, multi=2, fps=None, upscal
             'upscale': 1,
             'clean': 2,
             'full': 3,
+            'enhance': 1,
         }
         num_steps = mode_steps.get(mode, 1)
         step_bar = StepProgressBar(num_steps, input_path.name)
@@ -1111,6 +1250,7 @@ def process_single_file(input_path, output_path, mode, multi=2, fps=None, upscal
             'upscale': lambda i: process_image_upscale(i, step_bar, upscale_factor),
             'clean': lambda i: process_image_clean(i, step_bar),
             'full': lambda i: process_image_full(i, step_bar, upscale_factor),
+            'enhance': lambda i: process_image_enhance_super(i, step_bar),
         }
         if mode not in process_funcs:
             raise ValueError(f"Unknown mode: {mode}")
@@ -1273,6 +1413,8 @@ def show_info():
 
 def auto_download_models_for_mode():
     current_mode = get_model_mode()
+    if current_mode == 'super':
+        return ensure_super_models(SCRIPT_DIR, prompt=False)
     model_paths = get_model_paths()
     missing = []
     for key, path in model_paths.items():
@@ -1298,6 +1440,17 @@ def download_models_command(mode=None):
         print("Downloading all required models...")
     print("="*60 + "\n")
     current_mode = get_model_mode()
+    if current_mode == 'super':
+        result = ensure_super_models(SCRIPT_DIR, prompt=False)
+        if result:
+            print("\n" + "="*60)
+            print("All SUPER models downloaded successfully!")
+            print("="*60)
+        else:
+            print("\n" + "="*60)
+            print("Failed to download SUPER models. Please check your connection.")
+            print("="*60)
+        return
     model_paths = get_model_paths()
     result = ensure_models(SCRIPT_DIR, model_paths, auto_download=True, prompt=False, mode=current_mode)
     if result:
@@ -1317,7 +1470,10 @@ def interactive_mode():
     mode = select_model_mode()
     set_model_mode(mode)
     print(f"\nModel mode set to: {mode.upper()}")
-    check_and_download_models()
+    if mode == 'super':
+        ensure_super_models(SCRIPT_DIR, prompt=True)
+    else:
+        check_and_download_models()
     if os.path.exists(TEMP_DIR):
         print(f"\nCleaning up leftover temp folder from previous session...")
         try:
@@ -1325,23 +1481,32 @@ def interactive_mode():
             print("Temp folder cleaned successfully.")
         except Exception as e:
             print(f"Warning: Could not clean temp folder: {e}")
-    image_modes = {
-        '1': 'denoise',
-        '2': 'deblur',
-        '3': 'upscale',
-        '4': 'clean',
-        '5': 'full',
-    }
-    video_modes = {
-        '1': 'denoise',
-        '2': 'deblur',
-        '3': 'upscale',
-        '4': 'clean',
-        '5': 'full',
-        '6': 'frame-gen',
-        '7': 'clean-frame-gen',
-        '8': 'full-frame-gen',
-    }
+    if mode == 'super':
+        image_modes = {
+            '1': 'enhance',
+        }
+        video_modes = {
+            '1': 'enhance',
+            '2': 'enhance-frame-gen',
+        }
+    else:
+        image_modes = {
+            '1': 'denoise',
+            '2': 'deblur',
+            '3': 'upscale',
+            '4': 'clean',
+            '5': 'full',
+        }
+        video_modes = {
+            '1': 'denoise',
+            '2': 'deblur',
+            '3': 'upscale',
+            '4': 'clean',
+            '5': 'full',
+            '6': 'frame-gen',
+            '7': 'clean-frame-gen',
+            '8': 'full-frame-gen',
+        }
     device_selected = device is not None
     while True:
         while True:
@@ -1434,19 +1599,30 @@ def interactive_mode():
             print("\n" + "-"*60)
             print("IMAGE SETTINGS")
             print("-"*60)
-            print("\nSelect mode for images:")
-            print("  1. Denoise (remove noise)")
-            print("  2. Deblur (remove blur)")
-            print("  3. Upscale (4x upscaling)")
-            print("  4. Clean (denoise + deblur)")
-            print("  5. Full (denoise + deblur + upscale)")
-            while True:
-                choice = input("\nSelect mode (1-5): ").strip()
-                if choice in image_modes:
-                    image_mode = image_modes[choice]
-                    break
-                else:
-                    print(f"Error: Invalid choice '{choice}'. Please enter a number from 1 to 5.")
+            if mode == 'super':
+                print("\nSelect mode for images:")
+                print("  1. Enhance (SUPIR AI restoration)")
+                while True:
+                    choice = input("\nSelect mode (1): ").strip()
+                    if choice == '1' or choice == '':
+                        image_mode = 'enhance'
+                        break
+                    else:
+                        print(f"Error: Invalid choice '{choice}'. Please enter 1.")
+            else:
+                print("\nSelect mode for images:")
+                print("  1. Denoise (remove noise)")
+                print("  2. Deblur (remove blur)")
+                print("  3. Upscale (4x upscaling)")
+                print("  4. Clean (denoise + deblur)")
+                print("  5. Full (denoise + deblur + upscale)")
+                while True:
+                    choice = input("\nSelect mode (1-5): ").strip()
+                    if choice in image_modes:
+                        image_mode = image_modes[choice]
+                        break
+                    else:
+                        print(f"Error: Invalid choice '{choice}'. Please enter a number from 1 to 5.")
             if image_mode in ['upscale', 'full']:
                 print("\nUpscale factor options:")
                 print("  4 = 4x upscale (default)")
@@ -1469,22 +1645,51 @@ def interactive_mode():
             print("\n" + "-"*60)
             print("VIDEO SETTINGS")
             print("-"*60)
-            print("\nSelect mode for videos:")
-            print("  1. Denoise (remove noise)")
-            print("  2. Deblur (remove blur)")
-            print("  3. Upscale (4x upscaling)")
-            print("  4. Clean (denoise + deblur)")
-            print("  5. Full (denoise + deblur + upscale)")
-            print("  6. Frame Generation (interpolate video frames)")
-            print("  7. Clean + Frame Generation")
-            print("  8. Full + Frame Generation")
-            while True:
-                choice = input("\nSelect mode (1-8): ").strip()
-                if choice in video_modes:
-                    video_mode = video_modes[choice]
-                    break
-                else:
-                    print(f"Error: Invalid choice '{choice}'. Please enter a number from 1 to 8.")
+            if mode == 'super':
+                print("\nSelect mode for videos:")
+                print("  1. Enhance (SUPIR AI restoration)")
+                print("  2. Enhance + Frame Generation")
+                while True:
+                    choice = input("\nSelect mode (1-2): ").strip()
+                    if choice == '1' or choice == '':
+                        video_mode = 'enhance'
+                        break
+                    elif choice == '2':
+                        video_mode = 'enhance-frame-gen'
+                        break
+                    else:
+                        print(f"Error: Invalid choice '{choice}'. Please enter 1 or 2.")
+                if video_mode == 'enhance-frame-gen':
+                    print("\nFrame multiplier options:")
+                    print("  2 = double the frame rate")
+                    print("  4 = quadruple the frame rate")
+                    while True:
+                        multi_choice = input("Select multiplier (2 or 4, default 2): ").strip()
+                        if multi_choice == '' or multi_choice == '2':
+                            multi = 2
+                            break
+                        elif multi_choice == '4':
+                            multi = 4
+                            break
+                        else:
+                            print(f"Error: Invalid choice '{multi_choice}'. Please enter 2 or 4.")
+            else:
+                print("\nSelect mode for videos:")
+                print("  1. Denoise (remove noise)")
+                print("  2. Deblur (remove blur)")
+                print("  3. Upscale (4x upscaling)")
+                print("  4. Clean (denoise + deblur)")
+                print("  5. Full (denoise + deblur + upscale)")
+                print("  6. Frame Generation (interpolate video frames)")
+                print("  7. Clean + Frame Generation")
+                print("  8. Full + Frame Generation")
+                while True:
+                    choice = input("\nSelect mode (1-8): ").strip()
+                    if choice in video_modes:
+                        video_mode = video_modes[choice]
+                        break
+                    else:
+                        print(f"Error: Invalid choice '{choice}'. Please enter a number from 1 to 8.")
             if video_mode in ['upscale', 'full']:
                 print("\nUpscale factor options:")
                 print("  4 = 4x upscale (default)")
@@ -1681,10 +1886,12 @@ Examples:
   python klarity.py -lite denoise image.jpg  # Denoise with lite model
   python klarity.py -heavy upscale video.mp4 # Upscale with heavy model
   python klarity.py frame-gen video.mp4 --multi 2  # Frame interpolation
+  python klarity.py -super enhance image.jpg # SUPIR AI restoration
+  python klarity.py enhance image.jpg        # SUPIR AI restoration (auto-detects super)
         """
     )
     parser.add_argument('command', nargs='?', default='gui',
-                       help="Command: gui (default), cli, denoise, deblur, upscale, clean, full, frame-gen, clean-frame-gen, full-frame-gen, info, download-models")
+                       help="Command: gui (default), cli, denoise, deblur, upscale, clean, full, enhance, enhance-frame-gen, frame-gen, clean-frame-gen, full-frame-gen, info, download-models")
     parser.add_argument('input', nargs='?', help="Input file or folder")
     parser.add_argument('-o', '--output', help="Output file or folder")
     parser.add_argument('--multi', type=int, choices=[2, 4], default=2,
@@ -1699,20 +1906,32 @@ Examples:
     parser.add_argument('--cpu', action='store_true', help="Force CPU (legacy, same as --device cpu)")
     parser.add_argument('-heavy', action='store_true', help="Use heavy models (default, better quality)")
     parser.add_argument('-lite', action='store_true', help="Use lite models (faster, smaller)")
+    parser.add_argument('-super', action='store_true', help="Use SUPER mode (SUPIR AI restoration, requires extra deps)")
     parser.add_argument('--json-progress', action='store_true', help="Output progress as JSON (for GUI)")
     args = parser.parse_args()
 
     JSON_PROGRESS = args.json_progress
 
+    super_commands = ['enhance', 'enhance-frame-gen']
     if args.lite and args.heavy:
         print("Error: Cannot specify both -lite and -heavy flags")
         return
-    if args.lite:
+    if args.super and (args.lite or args.heavy):
+        print("Error: Cannot combine -super with -lite or -heavy flags")
+        return
+    if args.command in super_commands and not args.lite and not args.heavy:
+        set_model_mode('super')
+    elif args.super:
+        set_model_mode('super')
+    elif args.lite:
         set_model_mode('lite')
     elif args.heavy:
         set_model_mode('heavy')
     else:
         set_model_mode('heavy')
+    _mode = get_model_mode()
+    if _mode == 'super':
+        ensure_super_models(SCRIPT_DIR, prompt=False)
 
     if os.path.exists(TEMP_DIR):
         try:
@@ -1753,8 +1972,8 @@ Examples:
     if not args.input:
         print("Error: Input path required")
         print("Usage: python klarity.py <command> <input> [-o output]")
-        print("\nCommands: denoise, deblur, upscale, clean, full, frame-gen, clean-frame-gen, full-frame-gen")
-        print("\nModel modes: -heavy (default), -lite")
+        print("\nCommands: denoise, deblur, upscale, clean, full, enhance, frame-gen, clean-frame-gen, full-frame-gen, enhance-frame-gen")
+        print("\nModel modes: -heavy (default), -lite, -super")
         return
     if not auto_download_models_for_mode():
         print("Cannot continue without required models.")
