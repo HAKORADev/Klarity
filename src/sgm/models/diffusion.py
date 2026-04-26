@@ -87,7 +87,7 @@ class DiffusionEngine(pl.LightningModule):
         path: str,
     ) -> None:
         if path.endswith("ckpt"):
-            sd = torch.load(path, map_location="cpu")["state_dict"]
+            sd = torch.load(path, map_location="cpu", weights_only=False)["state_dict"]
         elif path.endswith("safetensors"):
             sd = load_safetensors(path)
         else:

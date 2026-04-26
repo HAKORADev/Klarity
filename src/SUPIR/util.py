@@ -18,7 +18,7 @@ def load_state_dict(ckpt_path, location='cpu'):
         import safetensors.torch
         state_dict = safetensors.torch.load_file(ckpt_path, device=location)
     else:
-        state_dict = get_state_dict(torch.load(ckpt_path, map_location=torch.device(location)))
+        state_dict = get_state_dict(torch.load(ckpt_path, map_location=torch.device(location), weights_only=False))
     state_dict = get_state_dict(state_dict)
     print(f'Loaded state_dict from [{ckpt_path}]')
     return state_dict
@@ -52,8 +52,8 @@ def create_SUPIR_model(config_path, SUPIR_sign=None, load_default_setting=False)
 
 def load_QF_ckpt(config_path):
     config = OmegaConf.load(config_path)
-    ckpt_F = torch.load(config.SUPIR_CKPT_F, map_location='cpu')
-    ckpt_Q = torch.load(config.SUPIR_CKPT_Q, map_location='cpu')
+    ckpt_F = torch.load(config.SUPIR_CKPT_F, map_location='cpu', weights_only=False)
+    ckpt_Q = torch.load(config.SUPIR_CKPT_Q, map_location='cpu', weights_only=False)
     return ckpt_Q, ckpt_F
 
 

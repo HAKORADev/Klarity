@@ -50,7 +50,7 @@ class AbstractAutoencoder(pl.LightningModule):
         self, path: str, ignore_keys: Union[Tuple, list, ListConfig] = tuple()
     ) -> None:
         if path.endswith("ckpt"):
-            sd = torch.load(path, map_location="cpu")["state_dict"]
+            sd = torch.load(path, map_location="cpu", weights_only=False)["state_dict"]
         elif path.endswith("safetensors"):
             sd = load_safetensors(path)
         else:

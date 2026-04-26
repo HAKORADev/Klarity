@@ -246,12 +246,12 @@ class GeneralConditionerWithControl(GeneralConditioner):
 class PreparedConditioner(nn.Module):
     def __init__(self, cond_pth, un_cond_pth=None):
         super().__init__()
-        conditions = torch.load(cond_pth)
+        conditions = torch.load(cond_pth, weights_only=False)
         for k, v in conditions.items():
             self.register_buffer(k, v)
         self.un_cond_pth = un_cond_pth
         if un_cond_pth is not None:
-            un_conditions = torch.load(un_cond_pth)
+            un_conditions = torch.load(un_cond_pth, weights_only=False)
             for k, v in un_conditions.items():
                 self.register_buffer(k+'_uc', v)
 
