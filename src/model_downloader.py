@@ -36,6 +36,10 @@ GDRIVE_FILE_IDS_SUPER = {
     'enhancer': '1ohCIBV_RAej1zuiidHph5qXNuD4GRxO3',
 }
 
+DIRECT_URLS_SUPER = {
+    'enhancer': 'https://huggingface.co/camenduru/SUPIR/resolve/main/SUPIR-v0Q.ckpt',
+}
+
 DIRECT_URLS_LITE = {
     'upscale': 'https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesr-general-x4v3.pth',
 }
@@ -327,21 +331,25 @@ def ensure_super_models(script_dir, prompt=True):
             enhancer_dir = os.path.join(script_dir, 'models', 'enhancer')
             os.makedirs(enhancer_dir, exist_ok=True)
             target_path = os.path.join(enhancer_dir, 'SUPIR-v0Q.ckpt')
+            temp_path = os.path.join(temp_dir, 'SUPIR-v0Q.ckpt')
+            direct_url = DIRECT_URLS_SUPER.get(key)
             file_id = GDRIVE_FILE_IDS_SUPER.get(key)
-            if file_id:
-                temp_path = os.path.join(temp_dir, 'SUPIR-v0Q.ckpt')
-                success = download_gdrive_file(file_id, temp_path, f"Downloading {name}")
-                if success:
-                    shutil.copy2(temp_path, target_path)
+            success = False
+            if direct_url:
+                success = download_with_progress(direct_url, temp_path, f"Downloading {name}")
+                if success and os.path.exists(temp_path) and os.path.getsize(temp_path) < 1000000:
                     os.remove(temp_path)
-                    print(f"Successfully downloaded: {name}")
-                else:
-                    if os.path.exists(temp_path):
-                        os.remove(temp_path)
-                    print(f"Failed to download: {name}")
-                    return False
+                    success = False
+            if not success and file_id:
+                success = download_gdrive_file(file_id, temp_path, f"Downloading {name}")
+            if success:
+                shutil.copy2(temp_path, target_path)
+                os.remove(temp_path)
+                print(f"Successfully downloaded: {name}")
             else:
-                print(f"No download source for: {name}")
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
+                print(f"Failed to download: {name}")
                 return False
         except KeyboardInterrupt:
             print("\n\nDownload interrupted by user.")
