@@ -50,8 +50,6 @@ class SUPIRProcessor:
         from SUPIR.util import create_SUPIR_model, load_state_dict, HWC3, upscale_image
         self._HWC3 = HWC3
         self._upscale_image = upscale_image
-        config_path = os.path.join(SUPIR_ROOT, 'options', 'SUPIR_v0.yaml')
-        config = OmegaConf.load(config_path)
         supir_ckpt_path = os.path.join(self.enhancer_dir, 'SUPIR-v0Q.ckpt')
         sdxl_names = ['sd_xl_base_1.0_0.9vae.safetensors', 'sd_xl_base_1.0.safetensors']
         sdxl_ckpt_path = None
@@ -60,15 +58,8 @@ class SUPIRProcessor:
             if os.path.exists(candidate):
                 sdxl_ckpt_path = candidate
                 break
-        if sdxl_ckpt_path is not None:
-            config.SDXL_CKPT = sdxl_ckpt_path
-        elif config.SDXL_CKPT and not os.path.exists(config.SDXL_CKPT):
-            config.SDXL_CKPT = None
-        config.SUPIR_CKPT_Q = supir_ckpt_path
-        config.SUPIR_CKPT_F = supir_ckpt_path
-        config.SUPIR_CKPT = None
         print("Loading SUPIR model (v0Q)...")
-        model = create_SUPIR_model(config_path, SUPIR_sign='Q')
+        model = create_SUPIR_model(os.path.join(SUPIR_ROOT, 'options', 'SUPIR_v0.yaml'))
         if sdxl_ckpt_path is not None:
             print("Loading SDXL weights...")
             state_dict = load_state_dict(sdxl_ckpt_path, location='cpu')
