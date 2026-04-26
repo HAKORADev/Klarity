@@ -51,6 +51,12 @@ class SUPIRProcessor:
         self._HWC3 = HWC3
         self._upscale_image = upscale_image
         supir_ckpt_path = os.path.join(self.enhancer_dir, 'SUPIR-v0Q.ckpt')
+        if os.path.exists(supir_ckpt_path):
+            with open(supir_ckpt_path, 'rb') as f:
+                header = f.read(10)
+            if header.startswith(b'<!') or header.startswith(b'<htm'):
+                os.remove(supir_ckpt_path)
+                raise RuntimeError(f"SUPIR-v0Q.ckpt is corrupted (HTML file). Delete it and re-download.")
         sdxl_names = ['sd_xl_base_1.0_0.9vae.safetensors', 'sd_xl_base_1.0.safetensors']
         sdxl_ckpt_path = None
         for sdxl_name in sdxl_names:

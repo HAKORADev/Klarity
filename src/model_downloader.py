@@ -251,6 +251,29 @@ def download_gdrive_large_file(file_id, output_path, desc="Downloading"):
         print(f"{desc} via gdown (ID: {file_id[:10]}...)")
         gdown.download(url, output_path, quiet=False)
         if os.path.exists(output_path) and os.path.getsize(output_path) > 1000000:
+            with open(output_path, 'rb') as f:
+                header = f.read(10)
+            if header.startswith(b'<!') or header.startswith(b'<htm'):
+                os.remove(output_path)
+                print("Direct download returned HTML, trying folder-based download...")
+                folder_url = f'https://drive.google.com/drive/folders/1yELzm5SvAi9e7kPcO_jPp2XkTs4vK6aR'
+                temp_dir = os.path.join(os.path.dirname(output_path), 'gdown_temp')
+                os.makedirs(temp_dir, exist_ok=True)
+                gdown.download_folder(folder_url, output=temp_dir, quiet=False)
+                for root, dirs, files in os.walk(temp_dir):
+                    for f in files:
+                        if f == 'SUPIR-v0Q.ckpt':
+                            src = os.path.join(root, f)
+                            with open(src, 'rb') as fh:
+                                header = fh.read(10)
+                            if not header.startswith(b'<!') and not header.startswith(b'<htm'):
+                                shutil.copy2(src, output_path)
+                            os.remove(src)
+                            break
+                shutil.rmtree(temp_dir, ignore_errors=True)
+                if os.path.exists(output_path) and os.path.getsize(output_path) > 1000000:
+                    return True
+                return False
             return True
         return False
     except ImportError:
