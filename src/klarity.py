@@ -1299,7 +1299,7 @@ def process_multiple_files(input_paths, output_arg, mode, multi=2, fps=None, ups
             if output_path:
                 output_files.append(output_path)
         except Exception as e:
-            progress.set_step(f"Error: {str(e)[:30]}")
+            progress.set_step(f"Error: {e}")
             progress.print_status(force=True)
             progress.print_newline()
             errors += 1
@@ -1339,7 +1339,7 @@ def process_file_pairs(file_pairs, mode, multi=2, fps=None, upscale_factor=4, fi
             progress.print_newline()
             processed += 1
         except Exception as e:
-            progress.set_step(f"Error: {str(e)[:30]}")
+            progress.set_step(f"Error: {e}")
             progress.print_status(force=True)
             progress.print_newline()
             errors += 1
