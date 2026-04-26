@@ -130,40 +130,69 @@ def download_with_progress(url, output_path, desc="Downloading"):
         print(f"\nDownload failed: {e}")
         return False
 
+def _download_stream_to_file(response, output_path, desc):
+    total_size = int(response.headers.get('content-length', 0))
+    os.makedirs(os.path.dirname(output_path) if os.path.dirname(output_path) else '.', exist_ok=True)
+    with open(output_path, 'wb') as f:
+        downloaded = 0
+        for chunk in response.iter_content(65536):
+            f.write(chunk)
+            downloaded += len(chunk)
+            if total_size > 0:
+                percent = min(100, downloaded * 100 // total_size)
+                mb_d = downloaded / (1024 * 1024)
+                mb_t = total_size / (1024 * 1024)
+                sys.stdout.write(f"\r{desc}: {percent}% ({mb_d:.1f}/{mb_t:.1f} MB)")
+                sys.stdout.flush()
+            else:
+                mb_d = downloaded / (1024 * 1024)
+                sys.stdout.write(f"\r{desc}: {mb_d:.1f} MB...")
+                sys.stdout.flush()
+    print()
+
+def _is_html_file(path):
+    if not os.path.exists(path):
+        return False
+    if os.path.getsize(path) < 100000:
+        with open(path, 'rb') as f:
+            header = f.read(20)
+        return header.lstrip().startswith(b'<!') or header.lstrip().startswith(b'<html') or header.lstrip().startswith(b'<HTML')
+    return False
+
+def _resolve_gdrive_confirm(session, file_id, initial_response):
+    text = initial_response.text
+    uuid_match = re.search(r'name="uuid" value="([^"]+)"', text)
+    download_url = 'https://drive.usercontent.google.com/download'
+    if uuid_match:
+        params = {'id': file_id, 'export': 'download', 'confirm': 't', 'uuid': uuid_match.group(1)}
+        return session.get(download_url, params=params, stream=True, allow_redirects=True, timeout=60)
+    confirm_match = re.search(r'href=["\'](/uc\?[^"\'> ]*confirm=[^"\'> ]*)["\']', text)
+    if confirm_match:
+        confirm_url = 'https://drive.google.com' + confirm_match.group(1).replace('&amp;', '&')
+        return session.get(confirm_url, stream=True, allow_redirects=True, timeout=60)
+    download_match = re.search(r'href=["\'](https://drive\.usercontent\.google\.com/download[^"\'> ]*)["\']', text)
+    if download_match:
+        dl_url = download_match.group(1).replace('&amp;', '&')
+        return session.get(dl_url, stream=True, allow_redirects=True, timeout=60)
+    params = {'id': file_id, 'export': 'download', 'confirm': 't'}
+    return session.get(download_url, params=params, stream=True, allow_redirects=True, timeout=60)
+
 def download_gdrive_file_requests(file_id, output_path, desc="Downloading"):
     if not HAS_REQUESTS:
         return None
     try:
         session = requests.Session()
+        session.headers.update({'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'})
         url = f'https://drive.google.com/uc?export=download&id={file_id}'
-        response = session.get(url, timeout=30)
-        uuid_match = re.search(r'name="uuid" value="([^"]+)"', response.text)
-        uuid = uuid_match.group(1) if uuid_match else None
-        if uuid:
-            download_url = 'https://drive.usercontent.google.com/download'
-            params = {
-                'id': file_id,
-                'export': 'download',
-                'confirm': 't',
-                'uuid': uuid
-            }
-            response = session.get(download_url, params=params, stream=True, timeout=30)
-        else:
-            response = session.get(url, stream=True, timeout=30)
+        response = session.get(url, timeout=60)
+        content_type = response.headers.get('content-type', '')
         total_size = int(response.headers.get('content-length', 0))
-        os.makedirs(os.path.dirname(output_path) if os.path.dirname(output_path) else '.', exist_ok=True)
-        with open(output_path, 'wb') as f:
-            downloaded = 0
-            for chunk in response.iter_content(32768):
-                f.write(chunk)
-                downloaded += len(chunk)
-                if total_size > 0:
-                    percent = min(100, downloaded * 100 // total_size)
-                    mb_downloaded = downloaded / (1024 * 1024)
-                    mb_total = total_size / (1024 * 1024)
-                    sys.stdout.write(f"\r{desc}: {percent}% ({mb_downloaded:.1f}/{mb_total:.1f} MB)")
-                    sys.stdout.flush()
-        print()
+        if 'text/html' in content_type or (total_size < 100000 and response.text.strip().startswith('<')):
+            response = _resolve_gdrive_confirm(session, file_id, response)
+        _download_stream_to_file(response, output_path, desc)
+        if _is_html_file(output_path):
+            os.remove(output_path)
+            return False
         return True
     except requests.exceptions.ConnectionError:
         print(f"\nConnection error - please check your internet connection")
@@ -178,26 +207,31 @@ def download_gdrive_file_requests(file_id, output_path, desc="Downloading"):
 def download_gdrive_file_urllib(file_id, output_path, desc="Downloading"):
     try:
         url = f'https://drive.google.com/uc?export=download&id={file_id}'
-        try:
-            response = urllib.request.urlopen(url, timeout=30)
-            content = response.read()
-            if b'confirm=' in content and b'href=' in content:
-                href_match = re.search(rb'href="([^"]*confirm=([^"&]+)[^"]*)"', content)
-                if href_match:
-                    confirm_url = href_match.group(1).decode('utf-8')
-                    if confirm_url.startswith('/'):
-                        confirm_url = 'https://drive.google.com' + confirm_url
-                    response = urllib.request.urlopen(confirm_url, timeout=300)
-                    content = response.read()
-            with open(output_path, 'wb') as f:
-                f.write(content)
-            return True
-        except urllib.error.HTTPError as e:
-            if e.code == 404:
-                print(f"File not found on Google Drive")
-            else:
-                print(f"HTTP Error {e.code}: {e.reason}")
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'})
+        response = urllib.request.urlopen(req, timeout=120)
+        content = response.read()
+        if b'confirm=' in content and b'href=' in content:
+            href_match = re.search(rb'href="([^"]*confirm=[^"]+)"', content)
+            if href_match:
+                confirm_url = href_match.group(1).decode('utf-8').replace('&amp;', '&')
+                if confirm_url.startswith('/'):
+                    confirm_url = 'https://drive.google.com' + confirm_url
+                req2 = urllib.request.Request(confirm_url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'})
+                response = urllib.request.urlopen(req2, timeout=3600)
+                content = response.read()
+        os.makedirs(os.path.dirname(output_path) if os.path.dirname(output_path) else '.', exist_ok=True)
+        with open(output_path, 'wb') as f:
+            f.write(content)
+        if _is_html_file(output_path):
+            os.remove(output_path)
             return False
+        return True
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            print(f"File not found on Google Drive")
+        else:
+            print(f"HTTP Error {e.code}: {e.reason}")
+        return False
     except Exception as e:
         print(f"Download failed: {e}")
         return False
@@ -249,33 +283,13 @@ def download_gdrive_large_file(file_id, output_path, desc="Downloading"):
         url = f'https://drive.google.com/uc?id={file_id}'
         os.makedirs(os.path.dirname(output_path) if os.path.dirname(output_path) else '.', exist_ok=True)
         print(f"{desc} via gdown (ID: {file_id[:10]}...)")
-        gdown.download(url, output_path, quiet=False)
+        gdown.download(url, output_path, quiet=False, fuzzy=True)
         if os.path.exists(output_path) and os.path.getsize(output_path) > 1000000:
-            with open(output_path, 'rb') as f:
-                header = f.read(10)
-            if header.startswith(b'<!') or header.startswith(b'<htm'):
-                os.remove(output_path)
-                print("Direct download returned HTML, trying folder-based download...")
-                folder_url = f'https://drive.google.com/drive/folders/1yELzm5SvAi9e7kPcO_jPp2XkTs4vK6aR'
-                temp_dir = os.path.join(os.path.dirname(output_path), 'gdown_temp')
-                os.makedirs(temp_dir, exist_ok=True)
-                gdown.download_folder(folder_url, output=temp_dir, quiet=False)
-                for root, dirs, files in os.walk(temp_dir):
-                    for f in files:
-                        if f == 'SUPIR-v0Q.ckpt':
-                            src = os.path.join(root, f)
-                            with open(src, 'rb') as fh:
-                                header = fh.read(10)
-                            if not header.startswith(b'<!') and not header.startswith(b'<htm'):
-                                shutil.copy2(src, output_path)
-                            os.remove(src)
-                            break
-                shutil.rmtree(temp_dir, ignore_errors=True)
-                if os.path.exists(output_path) and os.path.getsize(output_path) > 1000000:
-                    return True
-                return False
-            return True
-        return False
+            if not _is_html_file(output_path):
+                return True
+            os.remove(output_path)
+        print("gdown failed, trying requests fallback...")
+        return download_gdrive_file(file_id, output_path, desc)
     except ImportError:
         print("gdown not installed. Trying fallback method...")
         return download_gdrive_file(file_id, output_path, desc)
