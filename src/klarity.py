@@ -822,29 +822,10 @@ def process_image_full(img, step_bar=None, upscale_factor=4):
     img = process_image_upscale(img, step_bar, upscale_factor)
     return img
 
-def check_super_deps():
-    required = ['diffusers', 'transformers', 'accelerate', 'omegaconf', 'einops', 'open_clip', 'k_diffusion', 'pytorch_lightning']
-    missing = []
-    import importlib.util
-    for dep in required:
-        spec = importlib.util.find_spec(dep)
-        if spec is None:
-            missing.append(dep)
-    if missing:
-        print("\n" + "="*60)
-        print("ERROR: Missing dependencies for SUPER mode!")
-        print("="*60)
-        print(f"Missing packages: {', '.join(missing)}")
-        print("\nInstall with: pip install -r super-deps.txt")
-        print("The super-deps.txt file is in the Klarity project root.")
-        print("="*60)
-        sys.exit(1)
-
 def load_enhance_super_model():
     global enhance_super_model
     if enhance_super_model is not None:
         return enhance_super_model
-    check_super_deps()
     sys.path.insert(0, SCRIPT_DIR)
     from supir_arch import SUPIRProcessor
     enhance_super_model = SUPIRProcessor(MODELS_DIR)
