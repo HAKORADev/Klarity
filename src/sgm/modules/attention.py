@@ -46,11 +46,15 @@ else:
 try:
     import xformers
     import xformers.ops
-
+    import torch
+    _xf_q = torch.randn(1, 1, 1, 1, device='meta')
+    _xf_k = torch.randn(1, 1, 1, 1, device='meta')
+    _xf_v = torch.randn(1, 1, 1, 1, device='meta')
+    xformers.ops.memory_efficient_attention(_xf_q, _xf_k, _xf_v)
     XFORMERS_IS_AVAILABLE = True
 except:
     XFORMERS_IS_AVAILABLE = False
-    print("no module 'xformers'. Processing without...")
+    print("xformers memory_efficient_attention not available. Processing without...")
 
 from .diffusionmodules.util import checkpoint
 

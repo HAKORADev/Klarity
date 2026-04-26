@@ -28,6 +28,11 @@ from functools import partial
 try:
     import xformers
     import xformers.ops
+    import torch
+    _xf_q = torch.randn(1, 1, 1, 1, device='meta')
+    _xf_k = torch.randn(1, 1, 1, 1, device='meta')
+    _xf_v = torch.randn(1, 1, 1, 1, device='meta')
+    xformers.ops.memory_efficient_attention(_xf_q, _xf_k, _xf_v)
     XFORMERS_IS_AVAILBLE = True
 except:
     XFORMERS_IS_AVAILBLE = False

@@ -66,15 +66,20 @@ import torch
 import torch.version
 import torch.nn.functional as F
 from einops import rearrange
-from diffusers.utils.import_utils import is_xformers_available
 
 import SUPIR.utils.devices as devices
 
 try:
     import xformers
     import xformers.ops
-except ImportError:
-    pass
+    import torch
+    _xf_q = torch.randn(1, 1, 1, 1, device='meta')
+    _xf_k = torch.randn(1, 1, 1, 1, device='meta')
+    _xf_v = torch.randn(1, 1, 1, 1, device='meta')
+    xformers.ops.memory_efficient_attention(_xf_q, _xf_k, _xf_v)
+    is_xformers_available = True
+except:
+    is_xformers_available = False
 
 sd_flag = True
 
