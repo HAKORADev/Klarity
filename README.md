@@ -256,6 +256,7 @@ Each component has its own license:
 
 - **🤗 HuggingFace Space:** [Go To Demo Space](https://huggingface.co/spaces/HAKORADev/Klarity)
 - **🧪 Google Colab:** [open Notebook](https://colab.research.google.com/drive/14AaMnyz5sBuky2yOk-QmDhYtkh9V7o-3?usp=sharing)
+- **🧪 SUPER Mode (Experimental):** [super-mode branch](https://github.com/HAKORADev/Klarity/tree/super-mode) — SUPIR AI restoration integration for high-resolution sources
 
 > 📝 **Note:** The HuggingFace demo uses **Lite models** and supports **image processing only**. For Heavy models and video support, use the **desktop version** or the **Google Colab notebook**, which provides the full experience with Heavy models and video processing — just like running it on a real PC except GUI is desktop-only.
 
