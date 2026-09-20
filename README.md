@@ -1,3 +1,5 @@
+
+
 # Klarity - AI Image/Video Restoration
 
 <p align="center">
@@ -54,9 +56,9 @@ python src/klarity.py cli
 
 ## Core Capabilities
 
-### 🎨 **9 Processing Modes**
+### 🎨 **8 Processing Modes**
 
-Klarity offers nine distinct processing modes, each designed for specific enhancement needs:
+Klarity offers eight distinct processing modes, each designed for specific enhancement needs:
 
 | Mode | Description | Input | Output |
 |------|-------------|-------|--------|
