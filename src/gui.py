@@ -360,7 +360,7 @@ class ProcessingThread(QThread):
                         if match:
                             percent = int(match.group(1))
                             self.progress_update.emit(percent, line)
-                    except:
+                    except Exception:
                         pass
 
             if process.returncode == 0:
