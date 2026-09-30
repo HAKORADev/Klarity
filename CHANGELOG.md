@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.7.5.1] - 2026-09-30
+
+### Fixed
+
+- **Video processing on newer FFmpeg versions** — FFmpeg 9.0 removed the deprecated `-vsync` option, which made every video mode (frame-gen, clean-frame-gen, full-frame-gen) fail with `Unrecognized option 'vsync'` ([#1](https://github.com/HAKORADev/Klarity/issues/1))
+  - Frame extraction and frame compilation now probe the installed FFmpeg at runtime and use `-fps_mode passthrough` when available, falling back to `-vsync 0` on older builds — every FFmpeg version works
+  - The probe runs a 1-frame test encode with `-fps_mode passthrough`, then `-vsync 0`, and falls back to parsing `ffmpeg -version`; the result is probed once and cached per session
+
+### Changed
+
+- Removed dead assignments in `klarity.py` and `gui.py` (leftover variables with no effect)
+
+### Added
+
+- GitHub Actions workflow that builds CPU-only binaries for Linux and Windows from the repo, with CLI smoke tests on both runners (`--help` + `info`)
+- Packaging helpers now live in the repo: `klarity.spec` plus `packaging/linux/` (`cli.sh`, `install.sh`) and `packaging/windows/` (`cli.bat`, `cmd.bat`, `install.bat`, `logo.ico`)
+  - The Windows installer's PowerShell shortcut commands are fixed — the `$` variables had been stripped, so desktop and Start Menu shortcuts were never actually created in v0.7.0
+
+---
+
 ## [0.7.5] - 2026-04-21
 
 ### Changed

@@ -330,7 +330,6 @@ class ProcessingThread(QThread):
                 cwd=os.path.dirname(os.path.abspath(__file__))
             )
 
-            output_file = None
             while True:
                 if self.cancelled:
                     process.terminate()
@@ -351,9 +350,6 @@ class ProcessingThread(QThread):
                         percent = data.get('percent', 0)
                         step = data.get('step', '')
                         self.progress_update.emit(percent, step)
-
-                        if 'output' in data:
-                            output_file = data['output']
                     except json.JSONDecodeError:
                         pass
                 elif 'downloading' in line.lower():

@@ -2,6 +2,7 @@ import os
 import sys
 import argparse
 import glob
+import re
 import shutil
 import subprocess
 import time
@@ -415,7 +416,6 @@ def load_framegen_model():
     if framegen_model is not None:
         return framegen_model
     mode = get_model_mode()
-    model_paths = get_model_paths()
     sys.path.insert(0, SCRIPT_DIR)
     from rife_arch import RIFE
     model = RIFE(mode=mode)
@@ -639,6 +639,38 @@ def ensure_ffmpeg():
     if shutil.which('ffmpeg') is None:
         raise RuntimeError("ffmpeg not found. Please install ffmpeg to process videos.")
 
+_vsync_args_cache = None
+
+def _probe_ffmpeg_option(args):
+    try:
+        cmd = ['ffmpeg', '-hide_banner', '-loglevel', 'error',
+               '-f', 'lavfi', '-i', 'color=c=black:s=64x64:r=25:d=0.04',
+               '-frames:v', '1', '-f', 'null', '-'] + args
+        return subprocess.run(cmd, capture_output=True, timeout=60).returncode == 0
+    except Exception:
+        return False
+
+def _ffmpeg_version_tuple():
+    try:
+        out = subprocess.run(['ffmpeg', '-version'], capture_output=True, text=True, timeout=60).stdout
+        match = re.search(r'ffmpeg version (\d+)\.(\d+)', out)
+        if match:
+            return int(match.group(1)), int(match.group(2))
+    except Exception:
+        pass
+    return 0, 0
+
+def vsync_args():
+    global _vsync_args_cache
+    if _vsync_args_cache is None:
+        if _probe_ffmpeg_option(['-fps_mode', 'passthrough']):
+            _vsync_args_cache = ['-fps_mode', 'passthrough']
+        elif _probe_ffmpeg_option(['-vsync', '0']):
+            _vsync_args_cache = ['-vsync', '0']
+        else:
+            _vsync_args_cache = ['-fps_mode', 'passthrough'] if _ffmpeg_version_tuple() >= (5, 1) else ['-vsync', '0']
+    return list(_vsync_args_cache)
+
 def extract_frames(video_path, output_dir, desc="Extracting frames"):
     os.makedirs(output_dir, exist_ok=True)
     cap = cv2.VideoCapture(video_path)
@@ -646,7 +678,7 @@ def extract_frames(video_path, output_dir, desc="Extracting frames"):
     cap.release()
     cmd = [
         'ffmpeg', '-y', '-i', video_path,
-        '-vsync', '0',
+        *vsync_args(),
         os.path.join(output_dir, '%08d.png')
     ]
     process = subprocess.Popen(cmd, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
@@ -760,7 +792,7 @@ def blend_frames_for_fps(frames_dir, target_fps, original_fps):
         '-framerate', str(original_fps),
         '-i', os.path.join(frames_dir, '%08d.png'),
         '-vf', f'minterpolate=fps={target_fps}:mi_mode=blend',
-        '-vsync', '0',
+        *vsync_args(),
         os.path.join(blended_dir, '%08d.png')
     ]
     subprocess.run(cmd, capture_output=True)

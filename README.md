@@ -6,7 +6,7 @@
 
 <p align="center">
   <a href="https://github.com/HAKORADev/Klarity/releases/latest">
-    <img src="https://img.shields.io/badge/%F0%9F%93%A6%20Release-v0.7.5-green?style=for-the-badge" alt="Latest Release"/>
+    <img src="https://img.shields.io/badge/%F0%9F%93%A6%20Release-v0.7.5.1-green?style=for-the-badge" alt="Latest Release"/>
   </a>
   <a href="https://colab.research.google.com/drive/14AaMnyz5sBuky2yOk-QmDhYtkh9V7o-3?usp=sharing">
     <img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/>
