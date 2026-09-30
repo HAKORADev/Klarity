@@ -14,6 +14,10 @@ on:
         description: 'torch version to build with (cpu wheel)'
         required: false
         default: '2.7.1'
+      whats_new:
+        description: 'markdown for the What''s New section (blank = generic line)'
+        required: false
+        default: ''
 
 permissions:
   contents: write
@@ -105,7 +109,19 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ inputs.version }}
+          WHATS_NEW: ${{ inputs.whats_new }}
         run: |
+          python - <<'PY'
+          import os
+          template = open('.github/release_template.md', encoding='utf-8').read()
+          whats_new = os.environ.get('WHATS_NEW', '').strip()
+          if not whats_new:
+              whats_new = 'Bug fixes and improvements - see [CHANGELOG.md](https://github.com/HAKORADev/Klarity/blob/main/CHANGELOG.md) for the full list.'
+          body = template.replace('{{VERSION}}', os.environ['RELEASE_VERSION']).replace('{{WHATS_NEW}}', whats_new)
+          open('release_body.md', 'w', encoding='utf-8').write(body)
+          PY
           gh release view "${{ inputs.version }}" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1 || \
-            gh release create "${{ inputs.version }}" --repo "$GITHUB_REPOSITORY" --title "Klarity ${{ inputs.version }}" --notes "CPU-only builds for Linux and Windows. See CHANGELOG.md for details."
+            gh release create "${{ inputs.version }}" --repo "$GITHUB_REPOSITORY" --title "${{ inputs.version }}" --notes-file release_body.md || true
+          gh release edit "${{ inputs.version }}" --repo "$GITHUB_REPOSITORY" --title "${{ inputs.version }}" --notes-file release_body.md
           gh release upload "${{ inputs.version }}" klarity-cpu-* --repo "$GITHUB_REPOSITORY" --clobber

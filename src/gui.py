@@ -313,6 +313,7 @@ class ProcessingThread(QThread):
         self.output_path = output_path
         self.mode = mode
         self.cancelled = False
+        self.process = None
 
     def run(self):
         try:
@@ -326,6 +327,7 @@ class ProcessingThread(QThread):
                 bufsize=1,
                 cwd=os.path.dirname(os.path.abspath(__file__))
             )
+            self.process = process
 
             while True:
                 if self.cancelled:
@@ -374,6 +376,9 @@ class ProcessingThread(QThread):
 
     def cancel(self):
         self.cancelled = True
+        process = self.process
+        if process is not None and process.poll() is None:
+            process.terminate()
 
 
 class ScrollableImageViewer(QScrollArea):
@@ -1930,9 +1935,12 @@ class KlarityGUI(QMainWindow):
 
         def download():
             script_dir = os.path.dirname(os.path.abspath(__file__))
-            cmd = [sys.executable, os.path.join(script_dir, "klarity.py"), "download-models"]
+            cmd = [sys.executable]
+            if not getattr(sys, 'frozen', False):
+                cmd.append(os.path.join(script_dir, "klarity.py"))
+            cmd.append("download-models")
             if mode == "lite":
-                cmd.insert(3, "-lite")
+                cmd.append("-lite")
             subprocess.run(cmd, cwd=script_dir)
 
         thread = threading.Thread(target=download)
@@ -2116,7 +2124,10 @@ class KlarityGUI(QMainWindow):
         frame_mult = "2" if self.frame_combo.currentIndex() == 0 else "4"
         device = self.device_combo.currentText().lower()
 
-        cmd = [sys.executable, klarity_path, f"-{mode}", proc_mode, self.input_path, "--json-progress"]
+        cmd = [sys.executable]
+        if not getattr(sys, 'frozen', False):
+            cmd.append(klarity_path)
+        cmd.extend([f"-{mode}", proc_mode, self.input_path, "--json-progress"])
 
         if proc_mode in ["upscale", "full", "full-frame-gen"]:
             cmd.extend(["--upscale", upscale])
@@ -2219,6 +2230,9 @@ class KlarityGUI(QMainWindow):
             else:
                 QMessageBox.warning(self, "Output Not Found",
                     f"Could not find output file.\nExpected location: {result}")
+        elif result == "Cancelled":
+            self.status_label.setText("Cancelled")
+            self.status_label.setStyleSheet(f"color: {THEME['warning']}; font-size: 11px;")
         else:
             self.status_label.setText(result)
             self.status_label.setStyleSheet(f"color: {THEME['error']}; font-size: 11px;")

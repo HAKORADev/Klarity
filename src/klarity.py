@@ -680,11 +680,11 @@ def extract_frames(video_path, output_dir, desc="Extracting frames"):
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     cap.release()
     cmd = [
-        'ffmpeg', '-y', '-i', video_path,
+        'ffmpeg', '-y', '-loglevel', 'error', '-i', video_path,
         *vsync_args(),
         os.path.join(output_dir, '%08d.png')
     ]
-    process = subprocess.Popen(cmd, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
+    process = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     with tqdm(total=total_frames, desc=desc, unit="frames",
               bar_format="{l_bar}{bar:30}{r_bar}") as pbar:
         while process.poll() is None:
@@ -695,6 +695,8 @@ def extract_frames(video_path, output_dir, desc="Extracting frames"):
         if os.path.exists(output_dir):
             current_frames = len([f for f in os.listdir(output_dir) if f.endswith('.png')])
             pbar.update(current_frames - pbar.n)
+    if process.returncode != 0:
+        raise RuntimeError(f"ffmpeg frame extraction failed with exit code {process.returncode}")
 
 def extract_audio(video_path, audio_path):
     cmd = [
@@ -798,8 +800,23 @@ def blend_frames_for_fps(frames_dir, target_fps, original_fps):
         *vsync_args(),
         os.path.join(blended_dir, '%08d.png')
     ]
-    subprocess.run(cmd, capture_output=True)
+    result = subprocess.run(cmd, capture_output=True)
+    if result.returncode != 0:
+        print("Warning: frame blending failed, keeping the generated frames unchanged")
+        return frames_dir
     return blended_dir
+
+def resolve_target_fps(original_fps, multi, fps):
+    max_fps = original_fps * multi
+    if fps is None:
+        return max_fps
+    if fps < original_fps:
+        print(f"Warning: Target FPS {fps:.2f} below minimum ({original_fps:.2f}). Using {original_fps:.2f}")
+        return original_fps
+    if fps > max_fps:
+        print(f"Warning: Target FPS {fps:.2f} exceeds maximum ({max_fps:.2f}). Using max: {max_fps:.2f}")
+        return max_fps
+    return fps
 
 def process_image_denoise(img, step_bar=None):
     if step_bar:
@@ -850,8 +867,10 @@ def process_image_full(img, step_bar=None, upscale_factor=4):
     img = process_image_upscale(img, step_bar, upscale_factor)
     return img
 
+_rife_scale = 1.0
+
 def get_rife_scale():
-    return 1.0
+    return _rife_scale
 
 def get_rife_padding_divisor(scale=1.0):
     return max(64, int(64 / scale))
@@ -945,16 +964,8 @@ def process_video_multistep(video_path, output_path, steps, audio_path):
 def process_video_frame_gen(video_path, output_path, multi=2, fps=None):
     ensure_ffmpeg()
     original_fps, frame_count, width, height = get_video_info(video_path)
-    min_fps = original_fps
     max_fps = original_fps * multi
-    if fps is None:
-        fps = max_fps
-    elif fps < min_fps:
-        print(f"Warning: Target FPS {fps:.2f} below minimum ({min_fps:.2f}). Using max: {max_fps:.2f}")
-        fps = max_fps
-    elif fps > max_fps:
-        print(f"Warning: Target FPS {fps:.2f} exceeds maximum ({max_fps:.2f}). Using max: {max_fps:.2f}")
-        fps = max_fps
+    fps = resolve_target_fps(original_fps, multi, fps)
     frames_dir = os.path.join(TEMP_DIR, "frames")
     gen_dir = os.path.join(TEMP_DIR, "generated")
     audio_path = os.path.join(TEMP_DIR, "audio.aac")
@@ -983,16 +994,8 @@ def process_video_frame_gen(video_path, output_path, multi=2, fps=None):
 def process_video_clean_frame_gen(video_path, output_path, multi=2, fps=None):
     ensure_ffmpeg()
     original_fps, frame_count, width, height = get_video_info(video_path)
-    min_fps = original_fps
     max_fps = original_fps * multi
-    if fps is None:
-        fps = max_fps
-    elif fps < min_fps:
-        print(f"Warning: Target FPS {fps:.2f} below minimum ({min_fps:.2f}). Using max: {max_fps:.2f}")
-        fps = max_fps
-    elif fps > max_fps:
-        print(f"Warning: Target FPS {fps:.2f} exceeds maximum ({max_fps:.2f}). Using max: {max_fps:.2f}")
-        fps = max_fps
+    fps = resolve_target_fps(original_fps, multi, fps)
     frames_dir = os.path.join(TEMP_DIR, "frames")
     denoised_dir = os.path.join(TEMP_DIR, "denoised")
     cleaned_dir = os.path.join(TEMP_DIR, "cleaned")
@@ -1026,16 +1029,8 @@ def process_video_clean_frame_gen(video_path, output_path, multi=2, fps=None):
 def process_video_full_frame_gen(video_path, output_path, multi=2, fps=None, upscale_factor=4):
     ensure_ffmpeg()
     original_fps, frame_count, width, height = get_video_info(video_path)
-    min_fps = original_fps
     max_fps = original_fps * multi
-    if fps is None:
-        fps = max_fps
-    elif fps < min_fps:
-        print(f"Warning: Target FPS {fps:.2f} below minimum ({min_fps:.2f}). Using max: {max_fps:.2f}")
-        fps = max_fps
-    elif fps > max_fps:
-        print(f"Warning: Target FPS {fps:.2f} exceeds maximum ({max_fps:.2f}). Using max: {max_fps:.2f}")
-        fps = max_fps
+    fps = resolve_target_fps(original_fps, multi, fps)
     frames_dir = os.path.join(TEMP_DIR, "frames")
     denoised_dir = os.path.join(TEMP_DIR, "denoised")
     cleaned_dir = os.path.join(TEMP_DIR, "cleaned")
@@ -1702,7 +1697,7 @@ def interactive_mode():
             return
 
 def main():
-    global JSON_PROGRESS
+    global JSON_PROGRESS, _rife_scale
 
     parser = argparse.ArgumentParser(
         description="KLARITY - Image/Video Restoration Tool",
@@ -1737,6 +1732,7 @@ Examples:
     args = parser.parse_args()
 
     JSON_PROGRESS = args.json_progress
+    _rife_scale = args.scale
 
     if args.lite and args.heavy:
         print("Error: Cannot specify both -lite and -heavy flags")

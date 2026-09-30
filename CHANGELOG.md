@@ -14,11 +14,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Video processing on newer FFmpeg versions** — FFmpeg 9.0 removed the deprecated `-vsync` option, which made every video mode (frame-gen, clean-frame-gen, full-frame-gen) fail with `Unrecognized option 'vsync'` ([#1](https://github.com/HAKORADev/Klarity/issues/1))
   - Frame extraction and frame compilation now probe the installed FFmpeg at runtime and use `-fps_mode passthrough` when available, falling back to `-vsync 0` on older builds — every FFmpeg version works
   - The probe runs a 1-frame test encode with `-fps_mode passthrough`, then `-vsync 0`, and falls back to parsing `ffmpeg -version`; the result is probed once and cached per session
-- **Windows startup crash in the packaged build** — `klarity.exe` failed on launch with `WinError 1114` while loading the torch DLLs when a second OpenMP runtime got initialized first; the OpenMP duplicate guard is now set before torch is imported (plus a PyInstaller runtime hook that sets it even earlier inside the bundle)
+- **Windows startup crash in the packaged build** — `klarity.exe` failed on launch with `WinError 1114` while loading the torch DLLs; the torch CPU wheel ships `api-ms-win-crt-*` forwarder stubs inside `torch/lib`, and the frozen loader choked on them (the real UCRT lives in System32) — the stubs are now stripped from the bundle at build time
+- **GUI processing in the packaged Windows/Linux builds** — the frozen GUI spawned `klarity.exe` with the source path of `klarity.py` as the first argument, which the frozen binary cannot read (the source lives inside the executable), so every processing run died at startup while the CLI worked fine; the spawn is now frozen-aware and talks to the bundled CLI directly
+- **Download Models button in the packaged builds** — same frozen spawn problem, the button silently did nothing; fixed the same way
+- **Cancel could hang until the next output line** — cancelling only flipped a flag while the worker was blocked reading the CLI's output; the process is now terminated immediately on cancel, and closing the window during processing exits promptly too
+- **Frame extraction could hang on long videos** — ffmpeg was started with an unread stderr pipe, so once its progress output filled the 64 KB pipe buffer it blocked forever; extraction now runs quiet, and a non-zero ffmpeg exit is reported instead of failing later with a confusing error
+- **Target FPS below the source rate picked the maximum** — asking for 10 FPS on a 24 FPS video clamped to 48 FPS (the maximum); values below the minimum now clamp to the minimum, in all three frame-gen modes
+- **`--scale` was accepted but ignored** — the RIFE scale flag now actually reaches the frame generation model
 
 ### Changed
 
 - Removed dead assignments in `klarity.py` and `gui.py` (leftover variables with no effect), unused imports and dead `global` statements
+- A failed frame-blending step now warns and falls back to the unblended frames instead of silently producing a broken video
 - The app icon now lives inside the binary: the Windows executable carries the Klarity icon (Explorer, taskbar and shortcuts all use it), and the GUI window/taskbar icon is loaded from the icon bundled inside the package — no more loose `logo.png`/`logo.ico` sitting beside the binary
 - The Windows installer creates shortcuts through properly quoted PowerShell commands and points their icons at the executable itself
 
