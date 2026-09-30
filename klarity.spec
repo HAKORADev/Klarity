@@ -1,4 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
+import os
 import sys
 
 a = Analysis(
@@ -13,6 +14,8 @@ a = Analysis(
     excludes=[],
     noarchive=False,
 )
+
+a.binaries = [b for b in a.binaries if not os.path.basename(b[0]).lower().startswith('api-ms-')]
 
 pyz = PYZ(a.pure)
 
