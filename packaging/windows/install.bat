@@ -5,7 +5,6 @@ REM Klarity - Install desktop shortcut, Start Menu entry, and PATH
 
 set "KLARITY_DIR=%~dp0"
 set "KLARITY_EXE=%KLARITY_DIR%klarity.exe"
-set "KLARITY_ICON=%KLARITY_DIR%logo.ico"
 
 if not exist "%KLARITY_EXE%" (
     echo ERROR: klarity.exe not found at %KLARITY_EXE%
@@ -16,13 +15,13 @@ if not exist "%KLARITY_EXE%" (
 echo Creating desktop shortcut...
 set "SHORTCUT_PATH=%USERPROFILE%\Desktop\Klarity.lnk"
 
-powershell -Command "$w = New-Object -ComObject WScript.Shell; $s = $w.CreateShortcut(%SHORTCUT_PATH%); $s.TargetPath = %KLARITY_EXE%; $s.WorkingDirectory = %KLARITY_DIR%; $s.IconLocation = %KLARITY_ICON%,0; $s.Description = Klarity; $s.Save()"
+powershell -NoProfile -Command "$w = New-Object -ComObject WScript.Shell; $s = $w.CreateShortcut('%SHORTCUT_PATH%'); $s.TargetPath = '%KLARITY_EXE%'; $s.WorkingDirectory = '%KLARITY_DIR%'; $s.IconLocation = '%KLARITY_EXE%,0'; $s.Description = 'Klarity'; $s.Save()"
 
 set "STARTMENU=%APPDATA%\Microsoft\Windows\Start Menu\Programs"
 if not exist "%STARTMENU%\Klarity" mkdir "%STARTMENU%\Klarity"
 set "SM_PATH=%STARTMENU%\Klarity\Klarity.lnk"
 
-powershell -Command "$w = New-Object -ComObject WScript.Shell; $s = $w.CreateShortcut(%SM_PATH%); $s.TargetPath = %KLARITY_EXE%; $s.WorkingDirectory = %KLARITY_DIR%; $s.IconLocation = %KLARITY_ICON%,0; $s.Description = Klarity; $s.Save()"
+powershell -NoProfile -Command "$w = New-Object -ComObject WScript.Shell; $s = $w.CreateShortcut('%SM_PATH%'); $s.TargetPath = '%KLARITY_EXE%'; $s.WorkingDirectory = '%KLARITY_DIR%'; $s.IconLocation = '%KLARITY_EXE%,0'; $s.Description = 'Klarity'; $s.Save()"
 
 echo Adding Klarity to user PATH...
 set "PATH_KEY=HKCU\Environment"

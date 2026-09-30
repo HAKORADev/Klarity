@@ -7,7 +7,7 @@ set -euo pipefail
 # Resolve the directory where this script lives (realpath for symlinks)
 INSTALL_DIR="$(cd "$(dirname "$(realpath "$0")")" && pwd)"
 KLARITY_BIN="$INSTALL_DIR/klarity"
-KLARITY_ICON="$INSTALL_DIR/logo.png"
+KLARITY_ICON="$INSTALL_DIR/_internal/logo.png"
 DESKTOP_FILE="$HOME/.local/share/applications/klarity.desktop"
 
 # --- Pre-flight checks ---
@@ -17,7 +17,7 @@ if [[ ! -f "$KLARITY_BIN" ]]; then
 fi
 
 if [[ ! -f "$KLARITY_ICON" ]]; then
-    echo "ERROR: logo.png not found at $KLARITY_ICON"
+    echo "ERROR: _internal/logo.png not found at $KLARITY_ICON"
     exit 1
 fi
 

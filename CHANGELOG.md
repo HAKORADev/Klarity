@@ -14,10 +14,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Video processing on newer FFmpeg versions** — FFmpeg 9.0 removed the deprecated `-vsync` option, which made every video mode (frame-gen, clean-frame-gen, full-frame-gen) fail with `Unrecognized option 'vsync'` ([#1](https://github.com/HAKORADev/Klarity/issues/1))
   - Frame extraction and frame compilation now probe the installed FFmpeg at runtime and use `-fps_mode passthrough` when available, falling back to `-vsync 0` on older builds — every FFmpeg version works
   - The probe runs a 1-frame test encode with `-fps_mode passthrough`, then `-vsync 0`, and falls back to parsing `ffmpeg -version`; the result is probed once and cached per session
+- **Windows startup crash in the packaged build** — `klarity.exe` failed on launch with `WinError 1114` while loading the torch DLLs when a second OpenMP runtime got initialized first; the OpenMP duplicate guard is now set before torch is imported (plus a PyInstaller runtime hook that sets it even earlier inside the bundle)
 
 ### Changed
 
-- Removed dead assignments in `klarity.py` and `gui.py` (leftover variables with no effect)
+- Removed dead assignments in `klarity.py` and `gui.py` (leftover variables with no effect), unused imports and dead `global` statements
+- The app icon now lives inside the binary: the Windows executable carries the Klarity icon (Explorer, taskbar and shortcuts all use it), and the GUI window/taskbar icon is loaded from the icon bundled inside the package — no more loose `logo.png`/`logo.ico` sitting beside the binary
+- The Windows installer creates shortcuts through properly quoted PowerShell commands and points their icons at the executable itself
 
 ### Added
 

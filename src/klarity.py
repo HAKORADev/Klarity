@@ -1,7 +1,9 @@
 import os
 import sys
+
+os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
+
 import argparse
-import glob
 import re
 import shutil
 import subprocess
@@ -9,7 +11,6 @@ import time
 import json
 import threading
 from pathlib import Path
-from datetime import datetime, timedelta
 
 import torch
 import cv2
@@ -50,7 +51,6 @@ IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.tif', '.webp'}
 VIDEO_EXTENSIONS = {'.mp4', '.avi', '.mov', '.mkv', '.webm', '.flv', '.wmv', '.m4v'}
 
 device = None
-device_preference = None
 
 NAFNET_CONFIGS = {
     'deblur': {
@@ -136,7 +136,6 @@ class ProgressTracker:
         return time.strftime("%H:%M:%S", time.gmtime(seconds))
 
     def print_status(self, force=False):
-        global JSON_PROGRESS
         now = time.time()
         if not force and (now - self._last_update) < 0.1:
             return
@@ -241,7 +240,7 @@ def get_device(force_cpu=False, device_type=None):
     return device
 
 def select_device():
-    global device, device_preference
+    global device
     has_gpu, gpu_name, gpu_memory = check_gpu()
     print("\n" + "-"*40)
     print("Select device:")
@@ -1342,7 +1341,6 @@ def download_models_command(mode=None):
         print("="*60)
 
 def interactive_mode():
-    global device
     print("\n" + "="*60)
     print("KLARITY - Image/Video Restoration Tool")
     print("="*60)

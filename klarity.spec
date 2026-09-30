@@ -1,4 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
+import sys
 
 a = Analysis(
     ['src/klarity.py'],
@@ -8,12 +9,16 @@ a = Analysis(
     hiddenimports=['model_downloader', 'gui', 'nafnet_arch', 'hat_gan_arch', 'sr_arch', 'rife_arch'],
     hookspath=[],
     hooksconfig={},
-    runtime_hooks=[],
+    runtime_hooks=['packaging/runtime_hook.py'],
     excludes=[],
     noarchive=False,
 )
 
 pyz = PYZ(a.pure)
+
+exe_kwargs = {}
+if sys.platform == 'win32':
+    exe_kwargs['icon'] = 'packaging/windows/logo.ico'
 
 exe = EXE(
     pyz,
@@ -31,6 +36,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    **exe_kwargs,
 )
 
 coll = COLLECT(

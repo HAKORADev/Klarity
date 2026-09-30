@@ -58,7 +58,6 @@ jobs:
           cp -r dist/klarity/. stage/klarity/
           cp packaging/linux/cli.sh stage/klarity/
           cp packaging/linux/install.sh stage/klarity/
-          cp src/logo.png stage/klarity/
           chmod +x stage/klarity/cli.sh stage/klarity/install.sh stage/klarity/klarity
           tar -czf klarity-cpu-linux_${{ inputs.version }}.tar.gz -C stage klarity
       - name: Package (windows)
@@ -68,8 +67,6 @@ jobs:
           New-Item -ItemType Directory -Force stage/klarity/models | Out-Null
           Copy-Item dist/klarity/* stage/klarity/ -Recurse -Force
           Copy-Item packaging/windows/*.bat stage/klarity/
-          Copy-Item src/logo.png stage/klarity/logo.png
-          Copy-Item packaging/windows/logo.ico stage/klarity/logo.ico
           Compress-Archive -Path stage/klarity -DestinationPath "klarity-cpu-windows_${{ inputs.version }}.zip"
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -78,6 +75,10 @@ jobs:
           path: klarity-cpu-*
       - name: Create release
         if: inputs.publish == true
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "${{ inputs.version }}" klarity-cpu-* --title "Klarity ${{ inputs.version }}" --notes "CPU-only builds for Linux and Windows. See CHANGELOG.md for details."
+        run: |
+          gh release view "${{ inputs.version }}" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1 || \
+            gh release create "${{ inputs.version }}" --repo "$GITHUB_REPOSITORY" --title "Klarity ${{ inputs.version }}" --notes "CPU-only builds for Linux and Windows. See CHANGELOG.md for details."
+          gh release upload "${{ inputs.version }}" klarity-cpu-* --repo "$GITHUB_REPOSITORY" --clobber

@@ -1,27 +1,24 @@
 import os
 import sys
+import ctypes
 import subprocess
 import threading
 import time
 import json
 from pathlib import Path
-from datetime import datetime, timedelta
 
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QFrame, QLabel, QPushButton, QComboBox, QSlider, QCheckBox,
-    QFileDialog, QProgressBar, QSplitter, QScrollArea, QSizePolicy,
-    QMessageBox, QGroupBox, QSpacerItem, QStyle, QMenu, QAction,
-    QStackedWidget, QGraphicsView, QGraphicsScene, QGraphicsPixmapItem
+    QFileDialog, QProgressBar, QScrollArea, QSizePolicy,
+    QMessageBox, QGroupBox, QStackedWidget
 )
 from PyQt5.QtCore import (
-    Qt, QTimer, QThread, pyqtSignal, QSize, QPoint, QRectF,
-    QPropertyAnimation, QEasingCurve, QUrl, QRect
+    Qt, QTimer, QThread, pyqtSignal, QRectF, QRect
 )
 from PyQt5.QtGui import (
     QPixmap, QImage, QPainter, QColor, QPen, QBrush, QFont,
-    QLinearGradient, QRadialGradient, QPalette, QTransform,
-    QMovie, QWheelEvent, QIcon
+    QPalette, QIcon
 )
 
 THEME = {
@@ -1212,8 +1209,6 @@ class VideoComparisonWidget(QWidget):
         return None
 
     def _update_frame_at_time(self):
-        import cv2
-
         if self.current_time < 0:
             self.current_time = 0
 
@@ -1519,6 +1514,22 @@ class VideoComparisonWidget(QWidget):
         self._display.update()
 
 
+def logo_path():
+    base = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(base, 'logo.png')
+
+
+def app_icon():
+    path = logo_path()
+    if not os.path.exists(path):
+        return None
+    pixmap = QPixmap(path)
+    icon = QIcon(path)
+    for size in [16, 22, 32, 48, 64, 128, 256]:
+        icon.addPixmap(pixmap.scaled(size, size, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+    return icon
+
+
 class KlarityGUI(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -1526,12 +1537,9 @@ class KlarityGUI(QMainWindow):
         self.setMinimumSize(800, 600)
         self.resize(1000, 700)
 
-        logo_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logo.png')
-        if os.path.exists(logo_path):
-            window_icon = QIcon(logo_path)
-            for size in [16, 22, 32, 48, 64, 128, 256]:
-                window_icon.addPixmap(QPixmap(logo_path).scaled(size, size, Qt.KeepAspectRatio, Qt.SmoothTransformation))
-            self.setWindowIcon(window_icon)
+        icon = app_icon()
+        if icon:
+            self.setWindowIcon(icon)
 
         self.setStyleSheet(f"background-color: {THEME['background']}; color: {THEME['text']};")
 
@@ -2281,12 +2289,15 @@ def main():
     app.setApplicationDisplayName('Klarity')
     app.setDesktopFileName('klarity')
 
-    logo_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logo.png')
-    if os.path.exists(logo_path):
-        app_icon = QIcon(logo_path)
-        app.setWindowIcon(app_icon)
-        for size in [16, 22, 32, 48, 64, 128, 256]:
-            app_icon.addPixmap(QPixmap(logo_path).scaled(size, size, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+    if sys.platform == 'win32':
+        try:
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID('HAKORADev.Klarity')
+        except Exception:
+            pass
+
+    icon = app_icon()
+    if icon:
+        app.setWindowIcon(icon)
 
     palette = QPalette()
     palette.setColor(QPalette.Window, QColor(THEME['background']))
