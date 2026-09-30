@@ -10,6 +10,10 @@ on:
         description: 'create a GitHub release'
         type: boolean
         default: false
+      torch_version:
+        description: 'torch version to build with (cpu wheel)'
+        required: false
+        default: '2.7.1'
 
 permissions:
   contents: write
@@ -33,11 +37,34 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install "torch==${{ inputs.torch_version }}" --index-url https://download.pytorch.org/whl/cpu
           pip install -r requirements.txt
           pip install pyinstaller
       - name: Build binaries
         run: pyinstaller --clean --noconfirm klarity.spec
+      - name: Diagnose torch bundle (windows)
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: |
+          pip install -q pefile
+          @'
+          import pathlib
+          import pefile
+          bundle = pathlib.Path('dist/klarity/_internal')
+          names = {p.name.lower() for p in bundle.rglob('*') if p.suffix.lower() == '.dll'}
+          pe = pefile.PE(str(bundle / 'torch/lib/c10.dll'), fast_load=True)
+          pe.parse_data_directories(directories=[pefile.DIRECTORY_ENTRY['IMAGE_DIRECTORY_ENTRY_IMPORT']])
+          for entry in getattr(pe, 'DIRECTORY_ENTRY_IMPORT', []):
+              name = entry.dll.decode()
+              if name.lower() in names:
+                  where = 'BUNDLE'
+              elif pathlib.Path('C:/Windows/System32', name).exists():
+                  where = 'SYSTEM'
+              else:
+                  where = 'MISSING'
+              print(f'{where:8s} {name}')
+          '@ | python -
+          python -c "import pathlib; fs = list(pathlib.Path('dist/klarity/_internal/torch/lib').glob('*.dll')); print('torch/lib files:', len(fs))"
       - name: Smoke test CLI (linux)
         if: matrix.platform == 'linux'
         run: |
